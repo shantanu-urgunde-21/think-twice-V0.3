@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>2/3 of Average - Think Twice</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="container">
+      <!-- Header -->
+      <header>
+        <h1>Think Twice - 2/3 of Average Game</h1>
+        <div id="headerControls">
+          <button
+            id="adminLoginBtn"
+            onclick="showAdminLogin()"
+            class="admin-toggle-btn"
+          >
+            Admin Login
+          </button>
+          <button
+            id="adminLogoutBtn"
+            onclick="logoutAdmin()"
+            class="admin-toggle-btn"
+            style="display: none"
+          >
+            Admin Logout
+          </button>
+        </div>
+      </header>
+
+      <!-- Admin Login Modal -->
+      <div id="adminLoginModal" class="modal" style="display: none">
+        <div class="modal-content">
+          <span class="close" onclick="closeAdminLogin()">&times;</span>
+          <h2>Admin Login</h2>
+          <form id="adminLoginForm">
+            <input
+              type="text"
+              id="adminUsername"
+              placeholder="Username"
+              required
+              autocomplete="username"
+            />
+            <input
+              type="password"
+              id="adminPassword"
+              placeholder="Password"
+              required
+              autocomplete="current-password"
+            />
+            <button type="submit">Login</button>
+          </form>
+          <div id="adminLoginError" class="error" style="display: none"></div>
+        </div>
+      </div>
+
+      <!-- Main Game Area -->
+      <section id="twoThirdsGame" class="section game-view">
+        <h2>2/3 of the Average Game</h2>
+        <div id="twoThirdsContent">
+          <p>
+            Each player guesses a number between 0 and 100. The winner is the
+            player whose guess is closest to 2/3 of the average of all guesses.
+          </p>
+
+          <form id="twoThirdsForm">
+            <label>Your Guess (0-100):</label>
+            <input
+              type="number"
+              id="twoThirdsGuess"
+              min="0"
+              max="100"
+              required
+            />
+            <button type="submit">Submit Guess</button>
+          </form>
+
+          <div id="twoThirdsWaiting" style="display: none">
+            <p>Waiting for other players...</p>
+            <p>Submissions: <span id="submissionCount">0</span></p>
+            <button
+              onclick="calculateTwoThirds()"
+              class="admin-action"
+              style="display: none"
+            >
+              Calculate Results
+            </button>
+          </div>
+
+          <div id="twoThirdsResults" style="display: none"></div>
+        </div>
+        <button onclick="backToHome()" class="back-btn">Back to Home</button>
+      </section>
+
+      <!-- Admin Panel (Only visible when logged in as admin) -->
+      <section id="adminPanel" class="section" style="display: none">
+        <h2>Admin Controls</h2>
+        <div class="admin-controls">
+          <div class="admin-control-group">
+            <h3>Game Management</h3>
+            <button onclick="startTwoThirdsGameAdmin()" class="admin-btn">
+              Start Game
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div id="notification" class="notification"></div>
+
+    <script>
+      // API URL
+      const API_URL = (() => {
+        if (window.BACKEND_URL) {
+          return window.BACKEND_URL;
+        }
+        if (
+          window.location.hostname === "localhost" ||
+          window.location.hostname === "127.0.0.1"
+        ) {
+          return "http://localhost:8000/api";
+        }
+        return "https://think-twice-v03-production.up.railway.app/api";
+      })();
+
+      let currentPlayer = null;
+      let currentGameId = null;
+      let adminToken = localStorage.getItem("adminToken");
+      let isAdmin = false;
+
+      // Initialize
+      document.addEventListener("DOMContentLoaded", () => {
+        checkAdminStatus();
+
+        const savedPlayer = localStorage.getItem("currentPlayer");
+        if (savedPlayer) {
+          try {
+            currentPlayer = JSON.parse(savedPlayer);
+          } catch (e) {
+            console.error("Error restoring player:", e);
+            localStorage.removeItem("currentPlayer");
+            redirectToHome();
+          }
+        } else {
+          redirectToHome();
+        }
+
+        document
+          .getElementById("twoThirdsForm")
+          .addEventListener("submit", submitTwoThirdsGuess);
+        const adminLoginForm = document.getElementById("adminLoginForm");
+        if (adminLoginForm) {
+          adminLoginForm.addEventListener("submit", handleAdminLogin);
+        }
+
+        startTwoThirdsGameUI();
+      });
+
+      async function apiCall(endpoint, method = "GET", data = null) {
+        const options = {
+          method,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        };
+
+        if (adminToken) {
+          options.headers["Authorization"] = `Bearer ${adminToken}`;
+        }
+
+        if (data) {
+          options.body = JSON.stringify(data);
+        }
+
+        const response = await fetch(`${API_URL}${endpoint}`, options);
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.detail || "API call failed");
+        }
+
+        return response.json();
+      }
+
+      function redirectToHome() {
+        window.location.href = "index.html";
+      }
+
+      function backToHome() {
+        redirectToHome();
+      }
+
+      async function startTwoThirdsGameUI() {
+        try {
+          let game;
+          try {
+            game = await apiCall("/games/two-thirds/active");
+          } catch (e) {
+            game = null;
+          }
+
+          if (!game) {
+            document.getElementById("twoThirdsForm").style.display = "none";
+            document.getElementById("twoThirdsWaiting").innerHTML =
+              "<p>No active game. Admin needs to start the game.</p>";
+            document.getElementById("twoThirdsWaiting").style.display = "block";
+            return;
+          }
+
+          currentGameId = game.id;
+
+          const round = await apiCall(
+            `/games/two-thirds/${game.id}/current-round`,
+          );
+          document.getElementById("submissionCount").textContent =
+            round.submissions_count;
+
+          document.getElementById("twoThirdsForm").style.display = "block";
+          document.getElementById("twoThirdsWaiting").style.display = "none";
+        } catch (error) {
+          console.error("Error starting Two-Thirds game UI:", error);
+          document.getElementById("twoThirdsWaiting").innerHTML =
+            "<p>Error loading game. " + error.message + "</p>";
+          document.getElementById("twoThirdsWaiting").style.display = "block";
+        }
+      }
+
+      async function submitTwoThirdsGuess(e) {
+        e.preventDefault();
+        const guess = parseInt(document.getElementById("twoThirdsGuess").value);
+
+        try {
+          await apiCall(`/games/two-thirds/${currentGameId}/submit`, "POST", {
+            player_id: currentPlayer.id,
+            guess: guess,
+          });
+
+          document.getElementById("twoThirdsForm").reset();
+          document.getElementById("twoThirdsForm").style.display = "none";
+          document.getElementById("twoThirdsWaiting").style.display = "block";
+          showNotification(
+            "Guess submitted! Waiting for other players...",
+            "success",
+          );
+
+          updateSubmissionCount();
+        } catch (error) {
+          showNotification(error.message, "error");
+        }
+      }
+
+      async function updateSubmissionCount() {
+        try {
+          const round = await apiCall(
+            `/games/two-thirds/${currentGameId}/current-round`,
+          );
+          document.getElementById("submissionCount").textContent =
+            round.submissions_count;
+        } catch (error) {
+          console.error("Error updating submission count:", error);
+        }
+      }
+
+      async function calculateTwoThirds() {
+        try {
+          const result = await apiCall(
+            `/games/two-thirds/${currentGameId}/calculate`,
+            "POST",
+          );
+
+          let html = `<div class="result-box">
+                    <h3>Round Results</h3>
+                    <p><strong>Average of guesses:</strong> ${result.average.toFixed(2)}</p>
+                    <p><strong>2/3 of Average:</strong> ${result.two_thirds_average.toFixed(2)}</p>
+                    <p><strong>Winner (Closest Guess):</strong> ${result.winner_name}</p>
+                    <h4>All Guesses (sorted by distance):</h4>
+                    <table class="leaderboard-table">
+                        <thead>
+                            <tr>
+                                <th>Player</th>
+                                <th>Guess</th>
+                                <th>Distance from 2/3 Average</th>
+                                <th>Points Earned</th>
+                            </tr>
+                        </thead>
+                        <tbody>`;
+
+          result.all_guesses.forEach((guess) => {
+            html += `<tr>
+                        <td>${guess.player_name}</td>
+                        <td>${guess.guess}</td>
+                        <td>${guess.distance.toFixed(2)}</td>
+                        <td><strong>${guess.points}</strong></td>
+                    </tr>`;
+          });
+
+          html += `</tbody></table></div>`;
+          document.getElementById("twoThirdsResults").innerHTML = html;
+          document.getElementById("twoThirdsWaiting").style.display = "none";
+          document.getElementById("twoThirdsResults").style.display = "block";
+        } catch (error) {
+          showNotification(error.message, "error");
+        }
+      }
+
+      async function startTwoThirdsGameAdmin() {
+        if (!isAdmin) {
+          showNotification("Admin access required", "error");
+          return;
+        }
+
+        try {
+          await apiCall("/games/two-thirds/start", "POST");
+          showNotification("Two-Thirds game started successfully!", "success");
+          startTwoThirdsGameUI();
+        } catch (error) {
+          showNotification(error.message, "error");
+        }
+      }
+
+      // Admin Authentication Functions
+      function showAdminLogin() {
+        document.getElementById("adminLoginModal").style.display = "block";
+        document.getElementById("adminLoginError").style.display = "none";
+      }
+
+      function closeAdminLogin() {
+        document.getElementById("adminLoginModal").style.display = "none";
+        document.getElementById("adminUsername").value = "";
+        document.getElementById("adminPassword").value = "";
+        document.getElementById("adminLoginError").style.display = "none";
+      }
+
+      async function handleAdminLogin(e) {
+        e.preventDefault();
+        const username = document.getElementById("adminUsername").value;
+        const password = document.getElementById("adminPassword").value;
+
+        try {
+          const response = await fetch(
+            `${API_URL.replace("/api", "")}/api/auth/login`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ username, password }),
+            },
+          );
+
+          if (!response.ok) {
+            throw new Error("Invalid credentials");
+          }
+
+          const data = await response.json();
+          adminToken = data.access_token;
+          localStorage.setItem("adminToken", adminToken);
+          isAdmin = true;
+
+          updateAdminUI();
+          closeAdminLogin();
+          showNotification("Admin login successful!", "success");
+        } catch (error) {
+          document.getElementById("adminLoginError").textContent =
+            error.message;
+          document.getElementById("adminLoginError").style.display = "block";
+        }
+      }
+
+      function logoutAdmin() {
+        adminToken = null;
+        isAdmin = false;
+        localStorage.removeItem("adminToken");
+        updateAdminUI();
+        showNotification("Logged out successfully", "info");
+      }
+
+      async function checkAdminStatus() {
+        if (!adminToken) {
+          updateAdminUI();
+          return;
+        }
+
+        try {
+          const response = await fetch(
+            `${API_URL.replace("/api", "")}/api/auth/verify`,
+            {
+              headers: { Authorization: `Bearer ${adminToken}` },
+            },
+          );
+
+          if (response.ok) {
+            isAdmin = true;
+          } else {
+            logoutAdmin();
+            return;
+          }
+        } catch (error) {
+          logoutAdmin();
+          return;
+        }
+
+        updateAdminUI();
+      }
+
+      function updateAdminUI() {
+        const loginBtn = document.getElementById("adminLoginBtn");
+        const logoutBtn = document.getElementById("adminLogoutBtn");
+        const adminPanel = document.getElementById("adminPanel");
+
+        if (loginBtn) loginBtn.style.display = isAdmin ? "none" : "block";
+        if (logoutBtn) logoutBtn.style.display = isAdmin ? "block" : "none";
+        if (adminPanel) adminPanel.style.display = isAdmin ? "block" : "none";
+
+        document.querySelectorAll(".admin-action").forEach((btn) => {
+          btn.style.display = isAdmin ? "block" : "none";
+        });
+      }
+
+      function showNotification(message, type = "info") {
+        const notification = document.getElementById("notification");
+        notification.textContent = message;
+        notification.className = "notification " + type;
+        notification.style.display = "block";
+        setTimeout(() => {
+          notification.style.display = "none";
+        }, 3000);
+      }
+    </script>
+  </body>
+</html>

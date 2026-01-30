@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Horse Racing - Think Twice</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="container">
+      <!-- Header -->
+      <header>
+        <h1>Think Twice - Horse Racing Game</h1>
+        <div id="headerControls">
+          <button
+            id="adminLoginBtn"
+            onclick="showAdminLogin()"
+            class="admin-toggle-btn"
+          >
+            Admin Login
+          </button>
+          <button
+            id="adminLogoutBtn"
+            onclick="logoutAdmin()"
+            class="admin-toggle-btn"
+            style="display: none"
+          >
+            Admin Logout
+          </button>
+        </div>
+      </header>
+
+      <!-- Admin Login Modal -->
+      <div id="adminLoginModal" class="modal" style="display: none">
+        <div class="modal-content">
+          <span class="close" onclick="closeAdminLogin()">&times;</span>
+          <h2>Admin Login</h2>
+          <form id="adminLoginForm">
+            <input
+              type="text"
+              id="adminUsername"
+              placeholder="Username"
+              required
+              autocomplete="username"
+            />
+            <input
+              type="password"
+              id="adminPassword"
+              placeholder="Password"
+              required
+              autocomplete="current-password"
+            />
+            <button type="submit">Login</button>
+          </form>
+          <div id="adminLoginError" class="error" style="display: none"></div>
+        </div>
+      </div>
+
+      <!-- Main Game Area -->
+      <section id="horseRaceGame" class="section game-view">
+        <h2>Horse Racing Game</h2>
+        <div id="horseRaceContent">
+          <p>
+            Goal: Identify the 3 fastest horses from 25 horses using minimum
+            rounds. Each round, select 5 horses to race.
+          </p>
+          <p>Round: <strong id="currentRound">1</strong></p>
+
+          <div id="horseSelection">
+            <h3>Select 5 Horses to Race</h3>
+            <div id="horseList" class="horse-grid"></div>
+            <button onclick="raceSelectedHorses()" id="raceBtn" disabled>
+              Race Horses
+            </button>
+          </div>
+
+          <div id="raceResults" style="display: none">
+            <h3>Race Results</h3>
+            <div id="resultsDisplay"></div>
+            <button onclick="nextRound()">Next Round</button>
+          </div>
+
+          <div id="finalSubmission">
+            <h3>Submit Your Answer</h3>
+            <p>Think you know the top 3? Submit your answer:</p>
+            <div id="topThreeSelection">
+              <select id="first"></select>
+              <select id="second"></select>
+              <select id="third"></select>
+            </div>
+            <button onclick="submitTopThree()">Submit Top 3</button>
+          </div>
+
+          <div id="horseRaceFinalResults" style="display: none"></div>
+        </div>
+        <button onclick="backToHome()" class="back-btn">Back to Home</button>
+      </section>
+    </div>
+
+    <div id="notification" class="notification"></div>
+
+    <script>
+      // API URL
+      const API_URL = (() => {
+        if (window.BACKEND_URL) {
+          return window.BACKEND_URL;
+        }
+        if (
+          window.location.hostname === "localhost" ||
+          window.location.hostname === "127.0.0.1"
+        ) {
+          return "http://localhost:8000/api";
+        }
+        return "https://think-twice-v03-production.up.railway.app/api";
+      })();
+
+      let currentPlayer = null;
+      let currentGameId = null;
+      let selectedHorses = [];
+      let allHorses = [];
+      let adminToken = localStorage.getItem("adminToken");
+      let isAdmin = false;
+
+      // Initialize
+      document.addEventListener("DOMContentLoaded", () => {
+        checkAdminStatus();
+
+        const savedPlayer = localStorage.getItem("currentPlayer");
+        if (savedPlayer) {
+          try {
+            currentPlayer = JSON.parse(savedPlayer);
+          } catch (e) {
+            console.error("Error restoring player:", e);
+            localStorage.removeItem("currentPlayer");
+            redirectToHome();
+          }
+        } else {
+          redirectToHome();
+        }
+
+        const adminLoginForm = document.getElementById("adminLoginForm");
+        if (adminLoginForm) {
+          adminLoginForm.addEventListener("submit", handleAdminLogin);
+        }
+
+        startHorseRaceGame();
+      });
+
+      async function apiCall(endpoint, method = "GET", data = null) {
+        const options = {
+          method,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        };
+
+        if (adminToken) {
+          options.headers["Authorization"] = `Bearer ${adminToken}`;
+        }
+
+        if (data) {
+          options.body = JSON.stringify(data);
+        }
+
+        const response = await fetch(`${API_URL}${endpoint}`, options);
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.detail || "API call failed");
+        }
+
+        return response.json();
+      }
+
+      function redirectToHome() {
+        window.location.href = "index.html";
+      }
+
+      function backToHome() {
+        redirectToHome();
+      }
+
+      async function startHorseRaceGame() {
+        try {
+          const result = await apiCall("/games/horse-race/start", "POST", {
+            player_id: currentPlayer.id,
+          });
+
+          currentGameId = result.game_id;
+
+          const horses = await apiCall(
+            `/games/horse-race/${currentGameId}/horses`,
+          );
+          allHorses = horses;
+
+          loadHorseList();
+          document.getElementById("horseSelection").style.display = "block";
+          document.getElementById("raceResults").style.display = "none";
+          document.getElementById("finalSubmission").style.display = "none";
+        } catch (error) {
+          if (
+            error.message.includes("already played") ||
+            error.message.includes("2 times")
+          ) {
+            showNotification(
+              "You have already played the horse race game 2 times. Maximum limit reached.",
+              "error",
+            );
+          } else {
+            showNotification("Error starting game: " + error.message, "error");
+          }
+        }
+      }
+
+      function loadHorseList() {
+        const horseList = document.getElementById("horseList");
+        horseList.innerHTML = "";
+
+        allHorses.forEach((horse) => {
+          const label = document.createElement("label");
+          label.className = "horse-checkbox";
+
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.value = horse.id;
+          checkbox.onchange = () => updateSelection();
+
+          label.appendChild(checkbox);
+          label.appendChild(document.createTextNode(horse.name));
+          horseList.appendChild(label);
+        });
+
+        // Populate dropdowns
+        populateDropdowns();
+      }
+
+      function updateSelection() {
+        const checkboxes = document.querySelectorAll(
+          '#horseList input[type="checkbox"]:checked',
+        );
+        selectedHorses = Array.from(checkboxes).map((cb) => parseInt(cb.value));
+
+        const btn = document.getElementById("raceBtn");
+        btn.disabled = selectedHorses.length !== 5;
+      }
+
+      function populateDropdowns() {
+        const dropdowns = ["#first", "#second", "#third"];
+        dropdowns.forEach((selector) => {
+          const select = document.querySelector(selector);
+          select.innerHTML = '<option value="">Select a horse...</option>';
+          allHorses.forEach((horse) => {
+            const option = document.createElement("option");
+            option.value = horse.id;
+            option.textContent = horse.name;
+            select.appendChild(option);
+          });
+        });
+      }
+
+      async function raceSelectedHorses() {
+        if (selectedHorses.length !== 5) {
+          showNotification("Please select exactly 5 horses", "error");
+          return;
+        }
+
+        try {
+          const result = await apiCall(
+            `/games/horse-race/${currentGameId}/race`,
+            "POST",
+            {
+              player_id: currentPlayer.id,
+              selected_horse_ids: selectedHorses,
+            },
+          );
+
+          displayRaceResults(result);
+          document.getElementById("horseSelection").style.display = "none";
+          document.getElementById("raceResults").style.display = "block";
+          document.getElementById("currentRound").textContent =
+            result.round_number;
+        } catch (error) {
+          showNotification(error.message, "error");
+        }
+      }
+
+      function displayRaceResults(result) {
+        let html = '<div class="result-box">';
+        html += "<h4>Race Results (Fastest to Slowest):</h4>";
+        html += "<ol>";
+
+        result.race_results.forEach((horse) => {
+          html += `<li>${horse.name} (Speed: ${horse.speed})</li>`;
+        });
+
+        html += "</ol></div>";
+        document.getElementById("resultsDisplay").innerHTML = html;
+      }
+
+      function nextRound() {
+        selectedHorses = [];
+        document.getElementById("raceResults").style.display = "none";
+        document.getElementById("horseSelection").style.display = "block";
+
+        // Uncheck all checkboxes
+        document
+          .querySelectorAll('#horseList input[type="checkbox"]')
+          .forEach((cb) => {
+            cb.checked = false;
+          });
+
+        document.getElementById("raceBtn").disabled = true;
+      }
+
+      async function submitTopThree() {
+        const first = document.getElementById("first").value;
+        const second = document.getElementById("second").value;
+        const third = document.getElementById("third").value;
+
+        if (!first || !second || !third) {
+          showNotification("Please select all 3 horses", "error");
+          return;
+        }
+
+        if (first === second || second === third || first === third) {
+          showNotification("Please select 3 different horses", "error");
+          return;
+        }
+
+        try {
+          const result = await apiCall(
+            `/games/horse-race/${currentGameId}/submit-top-three`,
+            "POST",
+            {
+              player_id: currentPlayer.id,
+              top_three_ids: [
+                parseInt(first),
+                parseInt(second),
+                parseInt(third),
+              ],
+            },
+          );
+
+          let html = '<div class="result-box">';
+
+          if (result.correct) {
+            html += `<h3 class="success">Correct! ✓</h3>`;
+            html += `<p>You found the top 3 in ${result.rounds_used} rounds!</p>`;
+            html += `<p><strong>Points Earned: ${result.score}</strong></p>`;
+          } else {
+            html += `<h3 class="error">Incorrect ✗</h3>`;
+            html += `<p>The correct top 3 are:</p>`;
+            html += "<ol>";
+            result.actual_top_three.forEach((horse) => {
+              html += `<li>${horse.name} (Speed: ${horse.speed})</li>`;
+            });
+            html += "</ol>";
+            html += `<p><strong>Penalty: -10 points</strong></p>`;
+          }
+
+          html += "</div>";
+          document.getElementById("horseRaceFinalResults").innerHTML = html;
+          document.getElementById("finalSubmission").style.display = "none";
+          document.getElementById("horseRaceFinalResults").style.display =
+            "block";
+        } catch (error) {
+          showNotification(error.message, "error");
+        }
+      }
+
+      // Call this function after displaying race results
+      function showFinalSubmission() {
+        document.getElementById("finalSubmission").style.display = "block";
+      }
+
+      // Admin Authentication Functions
+      function showAdminLogin() {
+        document.getElementById("adminLoginModal").style.display = "block";
+        document.getElementById("adminLoginError").style.display = "none";
+      }
+
+      function closeAdminLogin() {
+        document.getElementById("adminLoginModal").style.display = "none";
+        document.getElementById("adminUsername").value = "";
+        document.getElementById("adminPassword").value = "";
+        document.getElementById("adminLoginError").style.display = "none";
+      }
+
+      async function handleAdminLogin(e) {
+        e.preventDefault();
+        const username = document.getElementById("adminUsername").value;
+        const password = document.getElementById("adminPassword").value;
+
+        try {
+          const response = await fetch(
+            `${API_URL.replace("/api", "")}/api/auth/login`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ username, password }),
+            },
+          );
+
+          if (!response.ok) {
+            throw new Error("Invalid credentials");
+          }
+
+          const data = await response.json();
+          adminToken = data.access_token;
+          localStorage.setItem("adminToken", adminToken);
+          isAdmin = true;
+
+          updateAdminUI();
+          closeAdminLogin();
+          showNotification("Admin login successful!", "success");
+        } catch (error) {
+          document.getElementById("adminLoginError").textContent =
+            error.message;
+          document.getElementById("adminLoginError").style.display = "block";
+        }
+      }
+
+      function logoutAdmin() {
+        adminToken = null;
+        isAdmin = false;
+        localStorage.removeItem("adminToken");
+        updateAdminUI();
+        showNotification("Logged out successfully", "info");
+      }
+
+      async function checkAdminStatus() {
+        if (!adminToken) {
+          updateAdminUI();
+          return;
+        }
+
+        try {
+          const response = await fetch(
+            `${API_URL.replace("/api", "")}/api/auth/verify`,
+            {
+              headers: { Authorization: `Bearer ${adminToken}` },
+            },
+          );
+
+          if (response.ok) {
+            isAdmin = true;
+          } else {
+            logoutAdmin();
+            return;
+          }
+        } catch (error) {
+          logoutAdmin();
+          return;
+        }
+
+        updateAdminUI();
+      }
+
+      function updateAdminUI() {
+        const loginBtn = document.getElementById("adminLoginBtn");
+        const logoutBtn = document.getElementById("adminLogoutBtn");
+
+        if (loginBtn) loginBtn.style.display = isAdmin ? "none" : "block";
+        if (logoutBtn) logoutBtn.style.display = isAdmin ? "block" : "none";
+      }
+
+      function showNotification(message, type = "info") {
+        const notification = document.getElementById("notification");
+        notification.textContent = message;
+        notification.className = "notification " + type;
+        notification.style.display = "block";
+        setTimeout(() => {
+          notification.style.display = "none";
+        }, 3000);
+      }
+    </script>
+  </body>
+</html>
