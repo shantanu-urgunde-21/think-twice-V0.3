@@ -162,6 +162,53 @@ class HorseRaceGameCompletion(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class GameSession(Base):
+    """Track game sessions for analytics"""
+
+    __tablename__ = "game_sessions"
+
+    id = Column(Integer, primary_key=True)
+    game_id = Column(Integer, ForeignKey("game.id"))
+    player_id = Column(Integer, ForeignKey("player.id"))
+    game_type = Column(String)  # "two_thirds", "horse_race"
+    started_at = Column(DateTime, default=datetime.utcnow)
+    ended_at = Column(DateTime, nullable=True)
+    duration_seconds = Column(Integer, nullable=True)
+    points_earned = Column(Integer, default=0)
+    completed = Column(Boolean, default=False)
+
+
+class GameRoundAnalytics(Base):
+    """Track per-round analytics"""
+
+    __tablename__ = "game_round_analytics"
+
+    id = Column(Integer, primary_key=True)
+    game_id = Column(Integer, ForeignKey("game.id"))
+    round_number = Column(Integer)
+    game_type = Column(String)
+    total_participants = Column(Integer, default=0)
+    average_score = Column(Float, nullable=True)
+    highest_score = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class PlayerGameStatistics(Base):
+    """Aggregate player statistics per game type"""
+
+    __tablename__ = "player_game_statistics"
+
+    id = Column(Integer, primary_key=True)
+    player_id = Column(Integer, ForeignKey("player.id"))
+    game_type = Column(String)  # "two_thirds", "horse_race"
+    total_plays = Column(Integer, default=0)
+    total_wins = Column(Integer, default=0)
+    total_points = Column(Integer, default=0)
+    average_points_per_game = Column(Float, default=0)
+    last_played = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 def get_db():
     db = SessionLocal()
     try:

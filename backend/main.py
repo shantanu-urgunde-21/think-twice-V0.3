@@ -436,6 +436,32 @@ def calculate_two_thirds_round(
     )
 
 
+@app.post("/api/games/two-thirds/{game_id}/close-lobby")
+def close_two_thirds_lobby(
+    game_id: int, db: Session = Depends(get_db), admin: str = Depends(require_admin)
+):
+    """Close the current Two-Thirds game lobby (Admin only)"""
+    round = (
+        db.query(TwoThirdsRound)
+        .filter(TwoThirdsRound.game_id == game_id, TwoThirdsRound.status == "open")
+        .first()
+    )
+
+    if not round:
+        raise HTTPException(status_code=400, detail="No open round to close")
+
+    round.status = "closed"
+    db.commit()
+
+    return {
+        "message": f"Round {round.round_number} closed successfully",
+        "round_id": round.id,
+        "submissions_received": db.query(TwoThirdsSubmission)
+        .filter(TwoThirdsSubmission.round_id == round.id)
+        .count(),
+    }
+
+
 # ==================== HORSE RACE GAME ENDPOINTS ====================
 
 
@@ -679,6 +705,374 @@ def submit_top_three(game_id: int, data: dict, db: Session = Depends(get_db)):
                 next(h for h in horses if h["id"] == hid) for hid in top_three_ids
             ],
         }
+
+
+@app.get("/api/games/horse-race/{game_id}/admin-results")
+def get_horse_race_admin_results(
+    game_id: int, db: Session = Depends(get_db), admin: str = Depends(require_admin)
+):
+    """Get horse race results with participant scores (Admin only)"""
+    horse_game = db.query(HorseRaceGame).filter(HorseRaceGame.id == game_id).first()
+
+    if not horse_game:
+        raise HTTPException(status_code=404, detail="Horse race game not found")
+
+    # Get all attempts for this game
+    attempts = (
+        db.query(HorseRaceAttempt).filter(HorseRaceAttempt.game_id == game_id).all()
+    )
+
+    # Build results grouped by player
+    results = {}
+    for attempt in attempts:
+        player = db.query(Player).filter(Player.id == attempt.player_id).first()
+
+        if attempt.player_id not in results:
+            results[attempt.player_id] = {
+                "player_name": player.name,
+                "total_score": player.total_score,
+                "rounds_used": attempt.total_rounds_used,
+                "identified_top_three": attempt.identified_top_three,
+                "completed": attempt.completed,
+            }
+
+    return {
+        "game_id": game_id,
+        "participant_scores": sorted(
+            results.values(),
+            key=lambda x: x["total_score"],
+            reverse=True,
+        ),
+    }
+
+
+@app.get("/api/games/two-thirds/{game_id}/admin-results")
+def get_two_thirds_admin_results(
+    game_id: int, db: Session = Depends(get_db), admin: str = Depends(require_admin)
+):
+    """Get Two-Thirds game results with all submissions (Admin only)"""
+    game = db.query(Game).filter(Game.id == game_id).first()
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    rounds = db.query(TwoThirdsRound).filter(TwoThirdsRound.game_id == game_id).all()
+
+    rounds_data = []
+    for round in rounds:
+        submissions = (
+            db.query(TwoThirdsSubmission)
+            .filter(TwoThirdsSubmission.round_id == round.id)
+            .all()
+        )
+
+        submissions_list = []
+        for submission in submissions:
+            player = db.query(Player).filter(Player.id == submission.player_id).first()
+            distance = (
+                abs(submission.guess - round.two_thirds_average)
+                if round.two_thirds_average
+                else None
+            )
+            points = max(0, int(100 - distance)) if distance is not None else None
+
+            submissions_list.append(
+                {
+                    "player_id": submission.player_id,
+                    "player_name": player.name if player else "Unknown",
+                    "guess": submission.guess,
+                    "distance": distance,
+                    "points": points,
+                }
+            )
+
+        rounds_data.append(
+            {
+                "round_number": round.round_number,
+                "status": round.status,
+                "average": round.average,
+                "two_thirds_average": round.two_thirds_average,
+                "winner_id": round.winner_id,
+                "submissions_count": len(submissions),
+                "submissions": sorted(
+                    submissions_list,
+                    key=lambda x: x["distance"] if x["distance"] is not None else 0,
+                ),
+            }
+        )
+
+    return {
+        "game_id": game_id,
+        "game_name": game.name,
+        "status": game.status,
+        "total_rounds": len(rounds),
+        "rounds": rounds_data,
+    }
+
+
+@app.get("/api/admin/all-games-summary")
+def get_all_games_summary(
+    db: Session = Depends(get_db), admin: str = Depends(require_admin)
+):
+    """Get summary of all active games (Admin only)"""
+    active_games = db.query(Game).filter(Game.status == "active").all()
+
+    games_summary = []
+    for game in active_games:
+        if game.name == "two_thirds":
+            open_rounds = (
+                db.query(TwoThirdsRound)
+                .filter(
+                    TwoThirdsRound.game_id == game.id, TwoThirdsRound.status == "open"
+                )
+                .all()
+            )
+
+            submissions_count = 0
+            for round in open_rounds:
+                submissions_count += (
+                    db.query(TwoThirdsSubmission)
+                    .filter(TwoThirdsSubmission.round_id == round.id)
+                    .count()
+                )
+
+            games_summary.append(
+                {
+                    "game_id": game.id,
+                    "game_type": "Two-Thirds",
+                    "status": game.status,
+                    "current_round": (
+                        open_rounds[0].round_number if open_rounds else "N/A"
+                    ),
+                    "submissions": submissions_count,
+                    "created_at": game.created_at,
+                }
+            )
+
+        elif game.name == "horse_race":
+            attempts = (
+                db.query(HorseRaceAttempt)
+                .filter(HorseRaceAttempt.game_id == game.id)
+                .all()
+            )
+
+            unique_players = set(a.player_id for a in attempts)
+
+            games_summary.append(
+                {
+                    "game_id": game.id,
+                    "game_type": "Horse Race",
+                    "status": game.status,
+                    "active_players": len(unique_players),
+                    "total_attempts": len(attempts),
+                    "created_at": game.created_at,
+                }
+            )
+
+    return {
+        "total_active_games": len(games_summary),
+        "games": games_summary,
+    }
+
+
+@app.get("/api/admin/player-statistics")
+def get_player_statistics(
+    db: Session = Depends(get_db), admin: str = Depends(require_admin)
+):
+    """Get comprehensive player statistics across all games (Admin only)"""
+    players = db.query(Player).all()
+
+    player_stats = []
+    for player in players:
+        # Two-Thirds participation
+        two_thirds_submissions = (
+            db.query(TwoThirdsSubmission)
+            .join(TwoThirdsRound)
+            .filter(TwoThirdsSubmission.player_id == player.id)
+            .all()
+        )
+
+        two_thirds_wins = (
+            db.query(TwoThirdsRound)
+            .filter(TwoThirdsRound.winner_id == player.id)
+            .count()
+        )
+
+        # Horse Race participation
+        horse_race_attempts = (
+            db.query(HorseRaceAttempt)
+            .filter(HorseRaceAttempt.player_id == player.id)
+            .all()
+        )
+
+        horse_race_completions = (
+            db.query(HorseRaceGameCompletion)
+            .filter(HorseRaceGameCompletion.player_id == player.id)
+            .first()
+        )
+
+        completion_count = (
+            horse_race_completions.completion_count if horse_race_completions else 0
+        )
+
+        player_stats.append(
+            {
+                "player_id": player.id,
+                "player_name": player.name,
+                "total_score": player.total_score,
+                "two_thirds": {
+                    "submissions": len(two_thirds_submissions),
+                    "wins": two_thirds_wins,
+                },
+                "horse_race": {
+                    "attempts": len(horse_race_attempts),
+                    "completions": completion_count,
+                },
+                "created_at": player.created_at,
+            }
+        )
+
+    return {
+        "total_players": len(player_stats),
+        "players": sorted(player_stats, key=lambda x: x["total_score"], reverse=True),
+    }
+
+
+@app.get("/api/admin/game-analytics")
+def get_game_analytics(
+    db: Session = Depends(get_db), admin: str = Depends(require_admin)
+):
+    """Get detailed analytics for all games (Admin only)"""
+
+    # Two-Thirds Analytics
+    all_two_thirds_rounds = db.query(TwoThirdsRound).all()
+    two_thirds_data = {
+        "total_rounds": len(all_two_thirds_rounds),
+        "completed_rounds": db.query(TwoThirdsRound)
+        .filter(TwoThirdsRound.status == "calculated")
+        .count(),
+        "open_rounds": db.query(TwoThirdsRound)
+        .filter(TwoThirdsRound.status == "open")
+        .count(),
+        "total_submissions": db.query(TwoThirdsSubmission).count(),
+        "average_submissions_per_round": (
+            db.query(TwoThirdsSubmission).count() / len(all_two_thirds_rounds)
+            if len(all_two_thirds_rounds) > 0
+            else 0
+        ),
+    }
+
+    # Horse Race Analytics
+    all_attempts = db.query(HorseRaceAttempt).all()
+    completed_attempts = [a for a in all_attempts if a.completed]
+
+    horse_race_data = {
+        "total_attempts": len(all_attempts),
+        "completed_games": len(completed_attempts),
+        "success_rate": (
+            len(completed_attempts) / len(all_attempts) * 100
+            if len(all_attempts) > 0
+            else 0
+        ),
+        "total_unique_players": len(set(a.player_id for a in all_attempts)),
+        "average_rounds_per_game": (
+            sum(a.total_rounds_used for a in all_attempts) / len(all_attempts)
+            if len(all_attempts) > 0
+            else 0
+        ),
+    }
+
+    # Overall Statistics
+    overall_stats = {
+        "total_players": db.query(Player).count(),
+        "total_score_distributed": sum(p.total_score for p in db.query(Player).all()),
+        "average_player_score": (
+            sum(p.total_score for p in db.query(Player).all())
+            / db.query(Player).count()
+            if db.query(Player).count() > 0
+            else 0
+        ),
+    }
+
+    return {
+        "two_thirds": two_thirds_data,
+        "horse_race": horse_race_data,
+        "overall": overall_stats,
+    }
+
+
+@app.get("/api/admin/session-overview")
+def get_session_overview(
+    db: Session = Depends(get_db), admin: str = Depends(require_admin)
+):
+    """Get current session overview - who's playing what (Admin only)"""
+
+    # Active Two-Thirds sessions
+    active_two_thirds_rounds = (
+        db.query(TwoThirdsRound).filter(TwoThirdsRound.status == "open").all()
+    )
+
+    two_thirds_sessions = []
+    for round in active_two_thirds_rounds:
+        submissions = (
+            db.query(TwoThirdsSubmission)
+            .filter(TwoThirdsSubmission.round_id == round.id)
+            .all()
+        )
+
+        submitted_players = [
+            {
+                "player_id": s.player_id,
+                "player_name": db.query(Player)
+                .filter(Player.id == s.player_id)
+                .first()
+                .name,
+                "guess": s.guess,
+                "submitted_at": s.created_at,
+            }
+            for s in submissions
+        ]
+
+        two_thirds_sessions.append(
+            {
+                "round_id": round.id,
+                "round_number": round.round_number,
+                "game_id": round.game_id,
+                "submitted_count": len(submissions),
+                "submitted_players": submitted_players,
+            }
+        )
+
+    # Active Horse Race sessions
+    active_horse_games = db.query(HorseRaceGame).all()
+    horse_race_sessions = []
+    for game in active_horse_games:
+        attempts = (
+            db.query(HorseRaceAttempt).filter(HorseRaceAttempt.game_id == game.id).all()
+        )
+
+        unique_players = {}
+        for attempt in attempts:
+            player = db.query(Player).filter(Player.id == attempt.player_id).first()
+            if attempt.player_id not in unique_players:
+                unique_players[attempt.player_id] = {
+                    "player_id": attempt.player_id,
+                    "player_name": player.name if player else "Unknown",
+                    "current_round": attempt.round_number,
+                    "completed": attempt.completed,
+                }
+
+        horse_race_sessions.append(
+            {
+                "game_id": game.id,
+                "active_players": list(unique_players.values()),
+                "total_active": len(unique_players),
+            }
+        )
+
+    return {
+        "two_thirds_sessions": two_thirds_sessions,
+        "horse_race_sessions": horse_race_sessions,
+    }
 
 
 # ==================== GENERAL ENDPOINTS ====================
