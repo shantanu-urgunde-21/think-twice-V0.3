@@ -12,7 +12,8 @@ const API_URL = (() => {
     }
     // Production: assumes backend is on same domain (if using proxy)
     // Otherwise, you'll need to set window.BACKEND_URL = 'https://your-backend.railway.app/api'
-    return `${window.location.protocol}//${window.location.hostname}/api`;
+    return 'https://think-twice-v03-production.up.railway.app/api';
+    // return `${window.location.protocol}//${window.location.hostname}/api`;
 })();
 
 let currentPlayer = null;
