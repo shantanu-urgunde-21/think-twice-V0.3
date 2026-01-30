@@ -8,16 +8,26 @@
   </head>
   <body>
     <div class="container">
-      <!-- Header -->
       <header>
-        <h1>Think Twice - Horse Racing Game</h1>
+        <h1>Horse Racing Game</h1>
         <div id="headerControls">
+          <span
+            id="playerDisplay"
+            style="margin-right: 15px; color: #333"
+          ></span>
+          <button
+            id="logoutPlayerBtn"
+            onclick="logoutPlayer()"
+            style="display: none; margin-right: 10px; background: #6c757d"
+          >
+            Logout
+          </button>
           <button
             id="adminLoginBtn"
             onclick="showAdminLogin()"
             class="admin-toggle-btn"
           >
-            Admin Login
+            Admin
           </button>
           <button
             id="adminLogoutBtn"
@@ -41,14 +51,12 @@
               id="adminUsername"
               placeholder="Username"
               required
-              autocomplete="username"
             />
             <input
               type="password"
               id="adminPassword"
               placeholder="Password"
               required
-              autocomplete="current-password"
             />
             <button type="submit">Login</button>
           </form>
@@ -56,61 +64,63 @@
         </div>
       </div>
 
-      <!-- Main Game Area -->
-      <section id="horseRaceGame" class="section game-view">
-        <h2>Horse Racing Game</h2>
-        <div id="horseRaceContent">
-          <p>
-            Goal: Identify the 3 fastest horses from 25 horses using minimum
-            rounds. Each round, select 5 horses to race.
-          </p>
-          <p>Round: <strong id="currentRound">1</strong></p>
+      <!-- Main Game -->
+      <section id="horseRaceGame" class="section">
+        <h2>Game Rules</h2>
+        <p>
+          Identify the 3 fastest horses from 25 horses in minimum rounds. Each
+          round: select 5 horses to race.
+        </p>
+        <p>
+          <strong>Scoring:</strong> 50 points - (5 points × rounds used).
+          Minimum: 10 points.
+        </p>
 
-          <div id="horseSelection">
-            <h3>Select 5 Horses to Race</h3>
-            <div id="horseList" class="horse-grid"></div>
-            <button onclick="raceSelectedHorses()" id="raceBtn" disabled>
-              Race Horses
-            </button>
-          </div>
+        <p>Round: <strong id="currentRound">1</strong></p>
 
-          <div id="raceResults" style="display: none">
-            <h3>Race Results</h3>
-            <div id="resultsDisplay"></div>
-            <button onclick="nextRound()">Next Round</button>
-          </div>
-
-          <div id="finalSubmission">
-            <h3>Submit Your Answer</h3>
-            <p>Think you know the top 3? Submit your answer:</p>
-            <div id="topThreeSelection">
-              <select id="first"></select>
-              <select id="second"></select>
-              <select id="third"></select>
-            </div>
-            <button onclick="submitTopThree()">Submit Top 3</button>
-          </div>
-
-          <div id="horseRaceFinalResults" style="display: none"></div>
+        <div id="horseSelection">
+          <h3>Select 5 Horses to Race</h3>
+          <div id="horseList" class="horse-grid"></div>
+          <button onclick="raceSelectedHorses()" id="raceBtn" disabled>
+            Race Horses
+          </button>
         </div>
+
+        <div id="raceResults" style="display: none">
+          <h3>Race Results (by Finish Position)</h3>
+          <div id="resultsDisplay"></div>
+          <button onclick="nextRound()">Next Round</button>
+        </div>
+
+        <div id="finalSubmission">
+          <h3>Submit Your Answer</h3>
+          <p>Think you know the top 3? Submit in order (1st, 2nd, 3rd):</p>
+          <div id="topThreeSelection">
+            <select id="first"></select>
+            <select id="second"></select>
+            <select id="third"></select>
+          </div>
+          <button onclick="submitTopThree()">Submit Top 3</button>
+        </div>
+
+        <div id="horseRaceFinalResults" style="display: none"></div>
         <button onclick="backToHome()" class="back-btn">Back to Home</button>
+      </section>
+
+      <!-- Admin Panel -->
+      <section id="adminPanel" class="section" style="display: none">
+        <h2>Admin - Participant Scores</h2>
+        <div id="adminScores"></div>
       </section>
     </div>
 
     <div id="notification" class="notification"></div>
 
     <script>
-      // API URL
       const API_URL = (() => {
-        if (window.BACKEND_URL) {
-          return window.BACKEND_URL;
-        }
-        if (
-          window.location.hostname === "localhost" ||
-          window.location.hostname === "127.0.0.1"
-        ) {
+        if (window.BACKEND_URL) return window.BACKEND_URL;
+        if (window.location.hostname === "localhost")
           return "http://localhost:8000/api";
-        }
         return "https://think-twice-v03-production.up.railway.app/api";
       })();
 
@@ -121,63 +131,57 @@
       let adminToken = localStorage.getItem("adminToken");
       let isAdmin = false;
 
-      // Initialize
       document.addEventListener("DOMContentLoaded", () => {
         checkAdminStatus();
 
         const savedPlayer = localStorage.getItem("currentPlayer");
         if (savedPlayer) {
-          try {
-            currentPlayer = JSON.parse(savedPlayer);
-          } catch (e) {
-            console.error("Error restoring player:", e);
-            localStorage.removeItem("currentPlayer");
-            redirectToHome();
-          }
+          currentPlayer = JSON.parse(savedPlayer);
+          updatePlayerDisplay();
         } else {
-          redirectToHome();
+          window.location.href = "index.html";
+          return;
         }
 
-        const adminLoginForm = document.getElementById("adminLoginForm");
-        if (adminLoginForm) {
-          adminLoginForm.addEventListener("submit", handleAdminLogin);
-        }
-
+        document
+          .getElementById("adminLoginForm")
+          ?.addEventListener("submit", handleAdminLogin);
         startHorseRaceGame();
       });
 
       async function apiCall(endpoint, method = "GET", data = null) {
         const options = {
           method,
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
         };
-
-        if (adminToken) {
+        if (adminToken)
           options.headers["Authorization"] = `Bearer ${adminToken}`;
-        }
-
-        if (data) {
-          options.body = JSON.stringify(data);
-        }
+        if (data) options.body = JSON.stringify(data);
 
         const response = await fetch(`${API_URL}${endpoint}`, options);
-
         if (!response.ok) {
           const error = await response.json();
           throw new Error(error.detail || "API call failed");
         }
-
         return response.json();
       }
 
-      function redirectToHome() {
+      function updatePlayerDisplay() {
+        if (currentPlayer) {
+          document.getElementById("playerDisplay").textContent =
+            `Playing as: ${currentPlayer.name}`;
+          document.getElementById("logoutPlayerBtn").style.display =
+            "inline-block";
+        }
+      }
+
+      function logoutPlayer() {
+        localStorage.removeItem("currentPlayer");
         window.location.href = "index.html";
       }
 
       function backToHome() {
-        redirectToHome();
+        window.location.href = "index.html";
       }
 
       async function startHorseRaceGame() {
@@ -185,70 +189,94 @@
           const result = await apiCall("/games/horse-race/start", "POST", {
             player_id: currentPlayer.id,
           });
-
           currentGameId = result.game_id;
-
-          const horses = await apiCall(
-            `/games/horse-race/${currentGameId}/horses`,
-          );
-          allHorses = horses;
-
-          loadHorseList();
-          document.getElementById("horseSelection").style.display = "block";
-          document.getElementById("raceResults").style.display = "none";
-          document.getElementById("finalSubmission").style.display = "none";
+          await loadHorses();
+          if (isAdmin) loadAdminScores();
         } catch (error) {
-          if (
-            error.message.includes("already played") ||
-            error.message.includes("2 times")
-          ) {
-            showNotification(
-              "You have already played the horse race game 2 times. Maximum limit reached.",
-              "error",
-            );
-          } else {
-            showNotification("Error starting game: " + error.message, "error");
-          }
+          showNotification(error.message, "error");
         }
       }
 
-      function loadHorseList() {
+      async function loadHorses() {
+        try {
+          allHorses = await apiCall(
+            `/games/horse-race/${currentGameId}/horses`,
+          );
+          renderHorses();
+          populateTopThreeSelects();
+        } catch (error) {
+          showNotification(error.message, "error");
+        }
+      }
+
+      function renderHorses() {
         const horseList = document.getElementById("horseList");
         horseList.innerHTML = "";
 
         allHorses.forEach((horse) => {
-          const label = document.createElement("label");
-          label.className = "horse-checkbox";
-
-          const checkbox = document.createElement("input");
-          checkbox.type = "checkbox";
-          checkbox.value = horse.id;
-          checkbox.onchange = () => updateSelection();
-
-          label.appendChild(checkbox);
-          label.appendChild(document.createTextNode(horse.name));
-          horseList.appendChild(label);
+          const div = document.createElement("div");
+          div.className = "horse-item";
+          div.textContent = horse.name;
+          div.onclick = () => toggleHorse(horse.id, div);
+          horseList.appendChild(div);
         });
-
-        // Populate dropdowns
-        populateDropdowns();
       }
 
-      function updateSelection() {
-        const checkboxes = document.querySelectorAll(
-          '#horseList input[type="checkbox"]:checked',
-        );
-        selectedHorses = Array.from(checkboxes).map((cb) => parseInt(cb.value));
+      function toggleHorse(horseId, element) {
+        if (selectedHorses.includes(horseId)) {
+          selectedHorses = selectedHorses.filter((id) => id !== horseId);
+          element.classList.remove("selected");
+        } else if (selectedHorses.length < 5) {
+          selectedHorses.push(horseId);
+          element.classList.add("selected");
+        } else {
+          showNotification("You can only select 5 horses!", "error");
+        }
 
-        const btn = document.getElementById("raceBtn");
-        btn.disabled = selectedHorses.length !== 5;
+        document.getElementById("raceBtn").disabled =
+          selectedHorses.length !== 5;
       }
 
-      function populateDropdowns() {
-        const dropdowns = ["#first", "#second", "#third"];
-        dropdowns.forEach((selector) => {
-          const select = document.querySelector(selector);
-          select.innerHTML = '<option value="">Select a horse...</option>';
+      async function raceSelectedHorses() {
+        try {
+          const result = await apiCall(
+            `/games/horse-race/${currentGameId}/race`,
+            "POST",
+            { player_id: currentPlayer.id, selected_horse_ids: selectedHorses },
+          );
+
+          document.getElementById("currentRound").textContent =
+            result.round_number;
+
+          // Show results WITHOUT speeds - only finish positions
+          let html = "<ol>";
+          result.race_results.forEach((horse) => {
+            html += `<li><strong>${horse.name}</strong> - Finished in position ${horse.position}</li>`;
+          });
+          html += "</ol>";
+          html += `<p class="success">${result.message}</p>`;
+
+          document.getElementById("resultsDisplay").innerHTML = html;
+          document.getElementById("horseSelection").style.display = "none";
+          document.getElementById("raceResults").style.display = "block";
+
+          if (isAdmin) loadAdminScores();
+        } catch (error) {
+          showNotification(error.message, "error");
+        }
+      }
+
+      function nextRound() {
+        selectedHorses = [];
+        document.getElementById("horseSelection").style.display = "block";
+        document.getElementById("raceResults").style.display = "none";
+        renderHorses();
+      }
+
+      function populateTopThreeSelects() {
+        ["first", "second", "third"].forEach((id) => {
+          const select = document.getElementById(id);
+          select.innerHTML = "<option value=''>Select...</option>";
           allHorses.forEach((horse) => {
             const option = document.createElement("option");
             option.value = horse.id;
@@ -258,72 +286,18 @@
         });
       }
 
-      async function raceSelectedHorses() {
-        if (selectedHorses.length !== 5) {
-          showNotification("Please select exactly 5 horses", "error");
-          return;
-        }
-
-        try {
-          const result = await apiCall(
-            `/games/horse-race/${currentGameId}/race`,
-            "POST",
-            {
-              player_id: currentPlayer.id,
-              selected_horse_ids: selectedHorses,
-            },
-          );
-
-          displayRaceResults(result);
-          document.getElementById("horseSelection").style.display = "none";
-          document.getElementById("raceResults").style.display = "block";
-          document.getElementById("currentRound").textContent =
-            result.round_number;
-        } catch (error) {
-          showNotification(error.message, "error");
-        }
-      }
-
-      function displayRaceResults(result) {
-        let html = '<div class="result-box">';
-        html += "<h4>Race Results (Fastest to Slowest):</h4>";
-        html += "<ol>";
-
-        result.race_results.forEach((horse) => {
-          html += `<li>${horse.name} (Speed: ${horse.speed})</li>`;
-        });
-
-        html += "</ol></div>";
-        document.getElementById("resultsDisplay").innerHTML = html;
-      }
-
-      function nextRound() {
-        selectedHorses = [];
-        document.getElementById("raceResults").style.display = "none";
-        document.getElementById("horseSelection").style.display = "block";
-
-        // Uncheck all checkboxes
-        document
-          .querySelectorAll('#horseList input[type="checkbox"]')
-          .forEach((cb) => {
-            cb.checked = false;
-          });
-
-        document.getElementById("raceBtn").disabled = true;
-      }
-
       async function submitTopThree() {
-        const first = document.getElementById("first").value;
-        const second = document.getElementById("second").value;
-        const third = document.getElementById("third").value;
+        const first = parseInt(document.getElementById("first").value);
+        const second = parseInt(document.getElementById("second").value);
+        const third = parseInt(document.getElementById("third").value);
 
         if (!first || !second || !third) {
-          showNotification("Please select all 3 horses", "error");
+          showNotification("Please select all three horses!", "error");
           return;
         }
 
-        if (first === second || second === third || first === third) {
-          showNotification("Please select 3 different horses", "error");
+        if (new Set([first, second, third]).size !== 3) {
+          showNotification("Please select three different horses!", "error");
           return;
         }
 
@@ -333,57 +307,79 @@
             "POST",
             {
               player_id: currentPlayer.id,
-              top_three_ids: [
-                parseInt(first),
-                parseInt(second),
-                parseInt(third),
-              ],
+              top_three_ids: [first, second, third],
             },
           );
 
-          let html = '<div class="result-box">';
-
+          let html = "<div class='result-box'>";
           if (result.correct) {
-            html += `<h3 class="success">Correct! ✓</h3>`;
-            html += `<p>You found the top 3 in ${result.rounds_used} rounds!</p>`;
-            html += `<p><strong>Points Earned: ${result.score}</strong></p>`;
-          } else {
-            html += `<h3 class="error">Incorrect ✗</h3>`;
-            html += `<p>The correct top 3 are:</p>`;
-            html += "<ol>";
+            html += `<h3 class="success">Correct! 🎉</h3>
+               <p>You earned <strong>${result.score}</strong> points!</p>
+               <p>Rounds used: ${result.rounds_used}</p>
+               <h4>The actual top 3 were:</h4><ol>`;
             result.actual_top_three.forEach((horse) => {
-              html += `<li>${horse.name} (Speed: ${horse.speed})</li>`;
+              html += `<li>${horse.name}</li>`;
             });
-            html += "</ol>";
-            html += `<p><strong>Penalty: -10 points</strong></p>`;
+            html += `</ol>`;
+          } else {
+            html += `<h3 class="error">Incorrect</h3>
+               <p>${result.message}</p>
+               <p>Keep racing to figure it out!</p>`;
           }
-
           html += "</div>";
+
           document.getElementById("horseRaceFinalResults").innerHTML = html;
-          document.getElementById("finalSubmission").style.display = "none";
           document.getElementById("horseRaceFinalResults").style.display =
             "block";
+
+          if (result.correct) {
+            document.getElementById("horseSelection").style.display = "none";
+            document.getElementById("finalSubmission").style.display = "none";
+          }
+
+          if (isAdmin) loadAdminScores();
         } catch (error) {
           showNotification(error.message, "error");
         }
       }
 
-      // Call this function after displaying race results
-      function showFinalSubmission() {
-        document.getElementById("finalSubmission").style.display = "block";
+      async function loadAdminScores() {
+        try {
+          const result = await apiCall(
+            `/admin/horse-race-scores/${currentGameId}`,
+          );
+
+          let html = "<h3>Participant Progress</h3>";
+          html += "<table class='leaderboard-table'>";
+          html +=
+            "<thead><tr><th>Player</th><th>Rounds Used</th><th>Status</th><th>Total Score</th></tr></thead>";
+          html += "<tbody>";
+
+          result.participants.forEach((p) => {
+            html += `<tr>
+        <td>${p.player_name}</td>
+        <td>${p.rounds_used}</td>
+        <td>${p.completed ? "✓ Completed" : "In Progress"}</td>
+        <td><strong>${p.total_score}</strong></td>
+      </tr>`;
+          });
+
+          html += "</tbody></table>";
+          document.getElementById("adminScores").innerHTML = html;
+        } catch (error) {
+          console.error("Error loading admin scores:", error);
+        }
       }
 
-      // Admin Authentication Functions
+      // Admin Auth
       function showAdminLogin() {
         document.getElementById("adminLoginModal").style.display = "block";
-        document.getElementById("adminLoginError").style.display = "none";
       }
 
       function closeAdminLogin() {
         document.getElementById("adminLoginModal").style.display = "none";
         document.getElementById("adminUsername").value = "";
         document.getElementById("adminPassword").value = "";
-        document.getElementById("adminLoginError").style.display = "none";
       }
 
       async function handleAdminLogin(e) {
@@ -401,9 +397,7 @@
             },
           );
 
-          if (!response.ok) {
-            throw new Error("Invalid credentials");
-          }
+          if (!response.ok) throw new Error("Invalid credentials");
 
           const data = await response.json();
           adminToken = data.access_token;
@@ -413,6 +407,7 @@
           updateAdminUI();
           closeAdminLogin();
           showNotification("Admin login successful!", "success");
+          loadAdminScores();
         } catch (error) {
           document.getElementById("adminLoginError").textContent =
             error.message;
@@ -425,7 +420,7 @@
         isAdmin = false;
         localStorage.removeItem("adminToken");
         updateAdminUI();
-        showNotification("Logged out successfully", "info");
+        showNotification("Logged out", "info");
       }
 
       async function checkAdminStatus() {
@@ -457,21 +452,22 @@
       }
 
       function updateAdminUI() {
-        const loginBtn = document.getElementById("adminLoginBtn");
-        const logoutBtn = document.getElementById("adminLogoutBtn");
-
-        if (loginBtn) loginBtn.style.display = isAdmin ? "none" : "block";
-        if (logoutBtn) logoutBtn.style.display = isAdmin ? "block" : "none";
+        document.getElementById("adminLoginBtn").style.display = isAdmin
+          ? "none"
+          : "inline-block";
+        document.getElementById("adminLogoutBtn").style.display = isAdmin
+          ? "inline-block"
+          : "none";
+        document.getElementById("adminPanel").style.display = isAdmin
+          ? "block"
+          : "none";
       }
 
       function showNotification(message, type = "info") {
         const notification = document.getElementById("notification");
         notification.textContent = message;
-        notification.className = "notification " + type;
-        notification.style.display = "block";
-        setTimeout(() => {
-          notification.style.display = "none";
-        }, 3000);
+        notification.className = `notification ${type} show`;
+        setTimeout(() => notification.classList.remove("show"), 3000);
       }
     </script>
   </body>
