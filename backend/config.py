@@ -13,7 +13,9 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 480  # 8 hours
 
 # Database Configuration
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://gameuser:gamepass123@localhost:5432/game_theory_db")
+DATABASE_URL = os.getenv(
+    "DATABASE_URL", "postgresql://gameuser:gamepass123@localhost:5432/game_theory_db"
+)
 
 # If Railway provides DATABASE_URL with postgres:// instead of postgresql://
 if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
@@ -25,7 +27,7 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 DEFAULT_CORS = [
     "http://localhost:3000",
     "http://localhost:8000",
-    "https://think-twice-v03-a171t19c4-think-twice-f383eaa5.vercel.app",  # Production Vercel URL
+    "https://think-twice-v03.vercel.app",  # Updated to match your actual Vercel URL
 ]
 if FRONTEND_URL not in DEFAULT_CORS:
     DEFAULT_CORS.append(FRONTEND_URL)
