@@ -1,6 +1,5 @@
 // API URL - automatically detects localhost vs production
-// For production: If your backend is on a different domain (e.g., Railway),
-// set window.BACKEND_URL before this script loads, or update this line directly
+// For production: Backend URL should be set via environment variable
 const API_URL = (() => {
     // Allow manual override via window.BACKEND_URL
     if (window.BACKEND_URL) {
@@ -10,10 +9,9 @@ const API_URL = (() => {
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
         return 'http://localhost:8000/api';
     }
-    // Production: assumes backend is on same domain (if using proxy)
-    // Otherwise, you'll need to set window.BACKEND_URL = 'https://your-backend.railway.app/api'
+    // Production: Use environment variable or Railway backend URL
+    // This is a fallback - should be configured via environment variables in Vercel
     return 'https://think-twice-v03-production.up.railway.app/api';
-    // return `${window.location.protocol}//${window.location.hostname}/api`;
 })();
 
 let currentPlayer = null;
