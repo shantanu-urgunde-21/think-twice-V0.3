@@ -67,6 +67,8 @@ origins = [
 # Add origins from environment variables (includes production Vercel URL)
 if CORS_ORIGINS:
     origins.extend([origin.strip() for origin in CORS_ORIGINS if origin.strip()])
+    # Remove duplicates
+    origins = list(dict.fromkeys(origins))
 
 app.add_middleware(
     CORSMiddleware,
