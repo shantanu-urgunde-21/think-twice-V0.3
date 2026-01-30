@@ -58,7 +58,7 @@ app = FastAPI(
     version="2.0.0",
 )
 
-# CORS Configuration
+# CORS Configuration - Build origins list
 origins = [
     "http://localhost:3000",
     "http://localhost:8000",
@@ -67,15 +67,19 @@ origins = [
 # Add origins from environment variables (includes production Vercel URL)
 if CORS_ORIGINS:
     origins.extend([origin.strip() for origin in CORS_ORIGINS if origin.strip()])
-    # Remove duplicates
-    origins = list(dict.fromkeys(origins))
 
+# Remove duplicates while preserving order
+origins = list(dict.fromkeys(origins))
+
+# Add CORS middleware - must be first middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=600,
 )
 
 
