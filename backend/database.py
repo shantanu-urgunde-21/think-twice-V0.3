@@ -168,8 +168,8 @@ class GameSession(Base):
     __tablename__ = "game_sessions"
 
     id = Column(Integer, primary_key=True)
-    game_id = Column(Integer, ForeignKey("game.id"))
-    player_id = Column(Integer, ForeignKey("player.id"))
+    game_id = Column(Integer, ForeignKey("games.id"))
+    player_id = Column(Integer, ForeignKey("players.id"))
     game_type = Column(String)  # "two_thirds", "horse_race"
     started_at = Column(DateTime, default=datetime.utcnow)
     ended_at = Column(DateTime, nullable=True)
@@ -184,7 +184,7 @@ class GameRoundAnalytics(Base):
     __tablename__ = "game_round_analytics"
 
     id = Column(Integer, primary_key=True)
-    game_id = Column(Integer, ForeignKey("game.id"))
+    game_id = Column(Integer, ForeignKey("games.id"))
     round_number = Column(Integer)
     game_type = Column(String)
     total_participants = Column(Integer, default=0)
@@ -199,7 +199,7 @@ class PlayerGameStatistics(Base):
     __tablename__ = "player_game_statistics"
 
     id = Column(Integer, primary_key=True)
-    player_id = Column(Integer, ForeignKey("player.id"))
+    player_id = Column(Integer, ForeignKey("players.id"))
     game_type = Column(String)  # "two_thirds", "horse_race"
     total_plays = Column(Integer, default=0)
     total_wins = Column(Integer, default=0)
