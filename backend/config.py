@@ -21,7 +21,20 @@ if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
 
 # CORS Configuration
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
-CORS_ORIGINS = os.getenv("CORS_ORIGINS", f"{FRONTEND_URL},http://localhost:8000").split(",")
+# Default CORS origins - includes both localhost (dev) and known production URLs
+DEFAULT_CORS = [
+    "http://localhost:3000",
+    "http://localhost:8000",
+    "https://think-twice-v03-a171t19c4-think-twice-f383eaa5.vercel.app",  # Production Vercel URL
+]
+if FRONTEND_URL not in DEFAULT_CORS:
+    DEFAULT_CORS.append(FRONTEND_URL)
+
+CORS_ORIGINS_STR = os.getenv("CORS_ORIGINS", None)
+if CORS_ORIGINS_STR:
+    CORS_ORIGINS = [origin.strip() for origin in CORS_ORIGINS_STR.split(",")]
+else:
+    CORS_ORIGINS = DEFAULT_CORS
 
 # Game Configuration
 MAX_PLAYERS = int(os.getenv("MAX_PLAYERS", "40"))
