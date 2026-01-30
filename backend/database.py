@@ -17,9 +17,7 @@ from config import DATABASE_URL
 
 # Use NullPool for Railway/serverless environments
 engine = create_engine(
-    DATABASE_URL,
-    poolclass=NullPool,
-    connect_args={"connect_timeout": 10}
+    DATABASE_URL, poolclass=NullPool, connect_args={"connect_timeout": 10}
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
@@ -35,9 +33,15 @@ class Player(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
-    game_participations = relationship("GameParticipation", back_populates="player", cascade="all, delete-orphan")
-    two_thirds_submissions = relationship("TwoThirdsSubmission", back_populates="player", cascade="all, delete-orphan")
-    horse_race_attempts = relationship("HorseRaceAttempt", back_populates="player", cascade="all, delete-orphan")
+    game_participations = relationship(
+        "GameParticipation", back_populates="player", cascade="all, delete-orphan"
+    )
+    two_thirds_submissions = relationship(
+        "TwoThirdsSubmission", back_populates="player", cascade="all, delete-orphan"
+    )
+    horse_race_attempts = relationship(
+        "HorseRaceAttempt", back_populates="player", cascade="all, delete-orphan"
+    )
 
 
 class Game(Base):
@@ -51,7 +55,22 @@ class Game(Base):
     completed_at = Column(DateTime, nullable=True)
 
     # Relationships
-    participations = relationship("GameParticipation", back_populates="game", cascade="all, delete-orphan")
+    participations = relationship(
+        "GameParticipation", back_populates="game", cascade="all, delete-orphan"
+    )
+
+
+class GameSettings(Base):
+    """Global settings for which games are displayed"""
+
+    __tablename__ = "game_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    game_name = Column(
+        String, unique=True, nullable=False
+    )  # "two_thirds", "horse_race"
+    enabled = Column(Boolean, default=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class GameParticipation(Base):
@@ -77,11 +96,15 @@ class TwoThirdsRound(Base):
     status = Column(String, default="open", index=True)
     average = Column(Float, nullable=True)
     two_thirds_average = Column(Float, nullable=True)
-    winner_id = Column(Integer, ForeignKey("players.id", ondelete="SET NULL"), nullable=True)
+    winner_id = Column(
+        Integer, ForeignKey("players.id", ondelete="SET NULL"), nullable=True
+    )
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
-    submissions = relationship("TwoThirdsSubmission", back_populates="round", cascade="all, delete-orphan")
+    submissions = relationship(
+        "TwoThirdsSubmission", back_populates="round", cascade="all, delete-orphan"
+    )
 
 
 class TwoThirdsSubmission(Base):
@@ -126,58 +149,17 @@ class HorseRaceAttempt(Base):
     player = relationship("Player", back_populates="horse_race_attempts")
 
 
-# Fish Pond Game Models
-class FishPondGame(Base):
-    __tablename__ = "fish_pond_games"
+class HorseRaceGameCompletion(Base):
+    """Track number of times a player has completed horse race games"""
+
+    __tablename__ = "horse_race_game_completions"
 
     id = Column(Integer, primary_key=True, index=True)
-    game_id = Column(Integer, ForeignKey("games.id", ondelete="CASCADE"), unique=True)
-    initial_stock = Column(Integer, default=100)
-    current_stock = Column(Integer, default=100)
-    max_capacity = Column(Integer, default=100)
-    current_round = Column(Integer, default=1)
-    status = Column(String, default="waiting", index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    completed_at = Column(DateTime, nullable=True)
-
-    # Relationships
-    rounds = relationship("FishPondRound", back_populates="game", cascade="all, delete-orphan")
-    decisions = relationship("PlayerFishingDecision", back_populates="game", cascade="all, delete-orphan")
-
-
-class FishPondRound(Base):
-    __tablename__ = "fish_pond_rounds"
-
-    id = Column(Integer, primary_key=True, index=True)
-    game_id = Column(Integer, ForeignKey("fish_pond_games.id", ondelete="CASCADE"))
-    round_number = Column(Integer)
-    status = Column(String, default="open", index=True)
-    stock_at_start = Column(Integer)
-    total_catch = Column(Integer, default=0)
-    stock_at_end = Column(Integer, nullable=True)
-    collapsed = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-    # Relationships
-    game = relationship("FishPondGame", back_populates="rounds")
-    decisions = relationship("PlayerFishingDecision", back_populates="round", cascade="all, delete-orphan")
-
-
-class PlayerFishingDecision(Base):
-    __tablename__ = "player_fishing_decisions"
-
-    id = Column(Integer, primary_key=True, index=True)
-    game_id = Column(Integer, ForeignKey("fish_pond_games.id", ondelete="CASCADE"))
-    round_id = Column(Integer, ForeignKey("fish_pond_rounds.id", ondelete="CASCADE"))
-    player_id = Column(Integer, ForeignKey("players.id", ondelete="CASCADE"))
-    catch_amount = Column(Integer, default=0)
-    round_score = Column(Integer, default=0)
-    submitted_at = Column(DateTime, default=datetime.utcnow)
-
-    # Relationships
-    game = relationship("FishPondGame", back_populates="decisions")
-    round = relationship("FishPondRound", back_populates="decisions")
-    player = relationship("Player")
+    player_id = Column(
+        Integer, ForeignKey("players.id", ondelete="CASCADE"), unique=True
+    )
+    completion_count = Column(Integer, default=0)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 def get_db():
@@ -189,5 +171,21 @@ def get_db():
 
 
 def init_db():
-    """Initialize database tables"""
+    """Initialize database tables and default settings"""
     Base.metadata.create_all(bind=engine)
+
+    # Initialize default game settings
+    db = SessionLocal()
+    try:
+        # Check if settings already exist
+        existing = db.query(GameSettings).count()
+        if existing == 0:
+            # Create default settings for both games (enabled)
+            games = [
+                GameSettings(game_name="two_thirds", enabled=True),
+                GameSettings(game_name="horse_race", enabled=True),
+            ]
+            db.add_all(games)
+            db.commit()
+    finally:
+        db.close()

@@ -113,42 +113,16 @@ class LeaderboardEntry(BaseModel):
         from_attributes = True
 
 
-# Fish Pond Game Schemas
-class FishPondSubmitCatch(BaseModel):
-    player_id: int
-    catch_amount: int = Field(..., ge=0)
+# Game Settings Schemas
+class GameSettingsUpdate(BaseModel):
+    game_name: str
+    enabled: bool
 
 
-class FishPondRoundResponse(BaseModel):
-    round_number: int
-    status: str
-    stock_at_start: int
-    total_catch: int
-    stock_at_end: Optional[int]
-    collapsed: bool
-    decisions: List[dict]  # List of player decisions for this round
+class GameSettingsResponse(BaseModel):
+    game_name: str
+    enabled: bool
+    updated_at: datetime
 
     class Config:
         from_attributes = True
-
-
-class FishPondGameResponse(BaseModel):
-    id: int
-    game_id: int
-    initial_stock: int
-    current_stock: int
-    max_capacity: int
-    current_round: int
-    status: str
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
-class FishPondResultResponse(BaseModel):
-    game_id: int
-    completed: bool
-    final_scores: List[dict]  # List of {player_id, player_name, total_score}
-    all_rounds: List[dict]
-    game_collapsed: bool

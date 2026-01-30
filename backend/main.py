@@ -12,14 +12,13 @@ from database import (
     init_db,
     Player,
     Game,
+    GameSettings,
     GameParticipation,
     TwoThirdsRound,
     TwoThirdsSubmission,
     HorseRaceGame,
     HorseRaceAttempt,
-    FishPondGame,
-    FishPondRound,
-    PlayerFishingDecision,
+    HorseRaceGameCompletion,
 )
 from schemas import (
     PlayerCreate,
@@ -33,12 +32,10 @@ from schemas import (
     HorseSelectionSubmit,
     HorseRaceRoundResult,
     LeaderboardEntry,
-    FishPondSubmitCatch,
-    FishPondGameResponse,
-    FishPondResultResponse,
+    GameSettingsUpdate,
+    GameSettingsResponse,
 )
 from config import (
-    FISH_POND_CONFIG,
     TWO_THIRDS_CONFIG,
     HORSE_RACE_CONFIG,
     MAX_PLAYERS,
@@ -126,6 +123,48 @@ def login(credentials: AdminLogin):
 def verify_admin(admin: str = Depends(require_admin)):
     """Verify admin token"""
     return {"authenticated": True, "username": admin}
+
+
+# ==================== GAME SETTINGS ENDPOINTS ====================
+
+
+@app.get("/api/games/enabled", response_model=List[dict])
+def get_enabled_games(db: Session = Depends(get_db)):
+    """Get list of enabled games to display on homepage"""
+    settings = db.query(GameSettings).filter(GameSettings.enabled == True).all()
+    return [{"game_name": s.game_name} for s in settings]
+
+
+@app.get("/api/games/settings", response_model=List[GameSettingsResponse])
+def get_game_settings(
+    db: Session = Depends(get_db), admin: str = Depends(require_admin)
+):
+    """Get all game settings (Admin only)"""
+    return db.query(GameSettings).all()
+
+
+@app.put("/api/games/settings/{game_name}", response_model=GameSettingsResponse)
+def update_game_settings(
+    game_name: str,
+    settings: GameSettingsUpdate,
+    db: Session = Depends(get_db),
+    admin: str = Depends(require_admin),
+):
+    """Update game visibility settings (Admin only)"""
+    game_setting = (
+        db.query(GameSettings).filter(GameSettings.game_name == game_name).first()
+    )
+
+    if not game_setting:
+        # Create new settings if doesn't exist
+        game_setting = GameSettings(game_name=game_name, enabled=settings.enabled)
+        db.add(game_setting)
+    else:
+        game_setting.enabled = settings.enabled
+
+    db.commit()
+    db.refresh(game_setting)
+    return game_setting
 
 
 # ==================== PLAYER ENDPOINTS ====================
@@ -326,7 +365,7 @@ def submit_two_thirds_guess(
 def calculate_two_thirds_round(
     game_id: int, db: Session = Depends(get_db), admin: str = Depends(require_admin)
 ):
-    """Calculate the winner of the current Two-Thirds round (Admin only)"""
+    """Calculate results of the current Two-Thirds round (Admin only)"""
     round = (
         db.query(TwoThirdsRound)
         .filter(TwoThirdsRound.game_id == game_id, TwoThirdsRound.status == "open")
@@ -350,7 +389,7 @@ def calculate_two_thirds_round(
     average = sum(guesses) / len(guesses)
     two_thirds_avg = (2 / 3) * average
 
-    # Find winner
+    # Find winner (closest to 2/3 average)
     winner = min(submissions, key=lambda s: abs(s.guess - two_thirds_avg))
 
     # Update round
@@ -359,9 +398,16 @@ def calculate_two_thirds_round(
     round.winner_id = winner.player_id
     round.status = "calculated"
 
-    # Award points
-    winner_player = db.query(Player).filter(Player.id == winner.player_id).first()
-    winner_player.total_score += TWO_THIRDS_CONFIG["winner_points"]
+    # Award points based on distance (closer = more points)
+    # Max distance is 100 (if guessed 0 and target is 100, or vice versa)
+    # Points = 100 - distance (minimum 0)
+    max_distance = 100
+    for submission in submissions:
+        distance = abs(submission.guess - two_thirds_avg)
+        points = max(0, int(max_distance - distance))
+
+        player = db.query(Player).filter(Player.id == submission.player_id).first()
+        player.total_score += points
 
     db.commit()
 
@@ -375,6 +421,7 @@ def calculate_two_thirds_round(
             .name,
             "guess": s.guess,
             "distance": abs(s.guess - two_thirds_avg),
+            "points": max(0, int(max_distance - abs(s.guess - two_thirds_avg))),
         }
         for s in submissions
     ]
@@ -415,6 +462,19 @@ def start_horse_race(player_data: HorseRaceStart, db: Session = Depends(get_db))
     player = db.query(Player).filter(Player.id == player_data.player_id).first()
     if not player:
         raise HTTPException(status_code=404, detail="Player not found")
+
+    # Check if player has already played 2 times
+    completion = (
+        db.query(HorseRaceGameCompletion)
+        .filter(HorseRaceGameCompletion.player_id == player_data.player_id)
+        .first()
+    )
+
+    if completion and completion.completion_count >= 2:
+        raise HTTPException(
+            status_code=400,
+            detail="You have already played the Horse Race game 2 times. Maximum plays reached.",
+        )
 
     game = Game(name="horse_race", status="active")
     db.add(game)
@@ -542,10 +602,12 @@ def submit_top_three(game_id: int, data: dict, db: Session = Depends(get_db)):
         .count()
     )
 
-    if is_correct:
-        score = max(50 - (rounds_used * 5), 10)
+    player = db.query(Player).filter(Player.id == player_id).first()
 
-        player = db.query(Player).filter(Player.id == player_id).first()
+    if is_correct:
+        # Changed formula: max(100 - rounds*5, 10) instead of max(50 - rounds*5, 10)
+        score = max(100 - (rounds_used * 5), 10)
+
         player.total_score += score
 
         latest_attempt = (
@@ -562,6 +624,21 @@ def submit_top_three(game_id: int, data: dict, db: Session = Depends(get_db)):
             latest_attempt.identified_top_three = True
             latest_attempt.completed = True
 
+        # Increment game completion count
+        completion = (
+            db.query(HorseRaceGameCompletion)
+            .filter(HorseRaceGameCompletion.player_id == player_id)
+            .first()
+        )
+
+        if not completion:
+            completion = HorseRaceGameCompletion(
+                player_id=player_id, completion_count=1
+            )
+            db.add(completion)
+        else:
+            completion.completion_count += 1
+
         db.commit()
 
         return {
@@ -572,414 +649,36 @@ def submit_top_three(game_id: int, data: dict, db: Session = Depends(get_db)):
             "actual_top_three": actual_top_three,
         }
     else:
-        return {
-            "correct": False,
-            "rounds_used": rounds_used,
-            "message": "Incorrect. Keep trying!",
-            "your_guess": [
-                next(h for h in horses if h["id"] == hid) for hid in top_three_ids
-            ],
-        }
+        # Wrong submission penalty: -10 points
+        penalty = -10
+        player.total_score += penalty
 
-
-# ==================== FISH POND GAME ENDPOINTS ====================
-
-
-@app.post("/api/games/fish-pond/start", response_model=FishPondGameResponse)
-def start_fish_pond_game(
-    db: Session = Depends(get_db), admin: str = Depends(require_admin)
-):
-    """Start a new Fish Pond game with all registered players (Admin only)"""
-    # Check if there's already an active game
-    existing_game = (
-        db.query(Game)
-        .filter(Game.name == "fish_pond", Game.status.in_(["active", "waiting"]))
-        .first()
-    )
-
-    if existing_game:
-        raise HTTPException(
-            status_code=400, detail="An active Fish Pond game already exists"
+        # Increment game completion count even on failure
+        completion = (
+            db.query(HorseRaceGameCompletion)
+            .filter(HorseRaceGameCompletion.player_id == player_id)
+            .first()
         )
 
-    # Get all players
-    players = db.query(Player).all()
-    if len(players) < 2:
-        raise HTTPException(
-            status_code=400, detail="Need at least 2 players to start Fish Pond game"
-        )
-
-    # Create game
-    game = Game(name="fish_pond", status="active")
-    db.add(game)
-    db.commit()
-    db.refresh(game)
-
-    # Create Fish Pond game instance
-    fish_game = FishPondGame(
-        game_id=game.id,
-        initial_stock=FISH_POND_CONFIG["initial_stock"],
-        current_stock=FISH_POND_CONFIG["initial_stock"],
-        max_capacity=FISH_POND_CONFIG["max_capacity"],
-        current_round=1,
-        status="round_open",
-    )
-    db.add(fish_game)
-    db.commit()
-    db.refresh(fish_game)
-
-    # Create first round
-    first_round = FishPondRound(
-        game_id=fish_game.id,
-        round_number=1,
-        status="open",
-        stock_at_start=FISH_POND_CONFIG["initial_stock"],
-    )
-    db.add(first_round)
-
-    # Create participations for all players
-    for player in players:
-        participation = GameParticipation(game_id=game.id, player_id=player.id, score=0)
-        db.add(participation)
-
-    db.commit()
-    db.refresh(fish_game)
-
-    return FishPondGameResponse(
-        id=fish_game.id,
-        game_id=fish_game.game_id,
-        initial_stock=fish_game.initial_stock,
-        current_stock=fish_game.current_stock,
-        max_capacity=fish_game.max_capacity,
-        current_round=fish_game.current_round,
-        status=fish_game.status,
-        created_at=fish_game.created_at,
-    )
-
-
-@app.get("/api/games/fish-pond/{game_id}", response_model=FishPondGameResponse)
-def get_fish_pond_game(game_id: int, db: Session = Depends(get_db)):
-    """Get Fish Pond game status"""
-    fish_game = db.query(FishPondGame).filter(FishPondGame.id == game_id).first()
-
-    if not fish_game:
-        raise HTTPException(status_code=404, detail="Fish Pond game not found")
-
-    return FishPondGameResponse(
-        id=fish_game.id,
-        game_id=fish_game.game_id,
-        initial_stock=fish_game.initial_stock,
-        current_stock=fish_game.current_stock,
-        max_capacity=fish_game.max_capacity,
-        current_round=fish_game.current_round,
-        status=fish_game.status,
-        created_at=fish_game.created_at,
-    )
-
-
-@app.get("/api/games/fish-pond/{game_id}/round", response_model=dict)
-def get_fish_pond_round_status(game_id: int, db: Session = Depends(get_db)):
-    """Get current round info and players who haven't submitted"""
-    fish_game = db.query(FishPondGame).filter(FishPondGame.id == game_id).first()
-
-    if not fish_game:
-        raise HTTPException(status_code=404, detail="Fish Pond game not found")
-
-    current_round = (
-        db.query(FishPondRound)
-        .filter(
-            FishPondRound.game_id == fish_game.id,
-            FishPondRound.round_number == fish_game.current_round,
-        )
-        .first()
-    )
-
-    if not current_round:
-        raise HTTPException(status_code=404, detail="Current round not found")
-
-    # Get all players in game
-    all_players = (
-        db.query(Player)
-        .join(GameParticipation)
-        .filter(GameParticipation.game_id == fish_game.game_id)
-        .all()
-    )
-
-    # Get players who submitted
-    submitted_player_ids = [
-        d.player_id
-        for d in db.query(PlayerFishingDecision)
-        .filter(PlayerFishingDecision.round_id == current_round.id)
-        .all()
-    ]
-
-    pending_players = [
-        {"id": p.id, "name": p.name}
-        for p in all_players
-        if p.id not in submitted_player_ids
-    ]
-
-    return {
-        "round_number": current_round.round_number,
-        "status": current_round.status,
-        "stock_at_start": current_round.stock_at_start,
-        "total_players": len(all_players),
-        "submitted_count": len(submitted_player_ids),
-        "pending_players": pending_players,
-        "all_submitted": len(pending_players) == 0,
-    }
-
-
-@app.post("/api/games/fish-pond/{game_id}/submit", response_model=dict)
-def submit_fish_catch(
-    game_id: int, submission: FishPondSubmitCatch, db: Session = Depends(get_db)
-):
-    """Submit a catch amount for the current round"""
-    fish_game = db.query(FishPondGame).filter(FishPondGame.id == game_id).first()
-
-    if not fish_game:
-        raise HTTPException(status_code=404, detail="Fish Pond game not found")
-
-    # Get current round
-    round = (
-        db.query(FishPondRound)
-        .filter(
-            FishPondRound.game_id == fish_game.id,
-            FishPondRound.round_number == fish_game.current_round,
-        )
-        .first()
-    )
-
-    if not round or round.status != "open":
-        raise HTTPException(status_code=400, detail="Round is not open")
-
-    # Validate catch amount
-    if submission.catch_amount > FISH_POND_CONFIG["max_catch_per_player"]:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Catch cannot exceed {FISH_POND_CONFIG['max_catch_per_player']}",
-        )
-
-    if submission.catch_amount > fish_game.current_stock:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Not enough fish in pond (available: {fish_game.current_stock})",
-        )
-
-    # Check if already submitted
-    existing = (
-        db.query(PlayerFishingDecision)
-        .filter(
-            PlayerFishingDecision.round_id == round.id,
-            PlayerFishingDecision.player_id == submission.player_id,
-        )
-        .first()
-    )
-
-    if existing:
-        raise HTTPException(
-            status_code=400, detail="Player already submitted for this round"
-        )
-
-    # Create decision record
-    decision = PlayerFishingDecision(
-        game_id=fish_game.id,
-        round_id=round.id,
-        player_id=submission.player_id,
-        catch_amount=submission.catch_amount,
-    )
-    db.add(decision)
-    db.commit()
-
-    player = db.query(Player).filter(Player.id == submission.player_id).first()
-
-    return {
-        "success": True,
-        "player_name": player.name,
-        "catch_amount": submission.catch_amount,
-        "message": f"Catch of {submission.catch_amount} fish submitted!",
-    }
-
-
-@app.post("/api/games/fish-pond/{game_id}/calculate-round", response_model=dict)
-def calculate_fish_pond_round(
-    game_id: int, db: Session = Depends(get_db), admin: str = Depends(require_admin)
-):
-    """Calculate round results and move to next round (Admin only)"""
-    fish_game = db.query(FishPondGame).filter(FishPondGame.id == game_id).first()
-
-    if not fish_game:
-        raise HTTPException(status_code=404, detail="Fish Pond game not found")
-
-    # Get current round
-    round = (
-        db.query(FishPondRound)
-        .filter(
-            FishPondRound.game_id == fish_game.id,
-            FishPondRound.round_number == fish_game.current_round,
-        )
-        .first()
-    )
-
-    if not round:
-        raise HTTPException(status_code=400, detail="No current round")
-
-    # Get all decisions
-    decisions = (
-        db.query(PlayerFishingDecision)
-        .filter(PlayerFishingDecision.round_id == round.id)
-        .all()
-    )
-
-    if not decisions:
-        raise HTTPException(status_code=400, detail="No catches submitted yet")
-
-    # Calculate total catch
-    total_catch = sum(d.catch_amount for d in decisions)
-    round.total_catch = total_catch
-
-    # Award points
-    for decision in decisions:
-        decision.round_score = decision.catch_amount
-        player = db.query(Player).filter(Player.id == decision.player_id).first()
-        player.total_score += decision.catch_amount
-
-    # Update stock
-    remaining_stock = fish_game.current_stock - total_catch
-
-    if remaining_stock <= 0:
-        # Stock collapsed
-        round.collapsed = True
-        round.stock_at_end = 0
-        fish_game.current_stock = 0
-        fish_game.status = "completed"
-        fish_game.completed_at = datetime.utcnow()
+        if not completion:
+            completion = HorseRaceGameCompletion(
+                player_id=player_id, completion_count=1
+            )
+            db.add(completion)
+        else:
+            completion.completion_count += 1
 
         db.commit()
 
         return {
-            "round_number": fish_game.current_round,
-            "total_catch": total_catch,
-            "stock_at_end": 0,
-            "collapsed": True,
-            "message": "The pond has been overfished and has collapsed! Game ended.",
-            "decisions": [
-                {
-                    "player_id": d.player_id,
-                    "player_name": db.query(Player)
-                    .filter(Player.id == d.player_id)
-                    .first()
-                    .name,
-                    "catch": d.catch_amount,
-                    "score": d.round_score,
-                }
-                for d in decisions
+            "correct": False,
+            "penalty": penalty,
+            "rounds_used": rounds_used,
+            "message": "Incorrect! You lost 10 points. Keep trying!",
+            "your_guess": [
+                next(h for h in horses if h["id"] == hid) for hid in top_three_ids
             ],
-            "game_ended": True,
         }
-
-    # Stock regeneration
-    growth = remaining_stock * FISH_POND_CONFIG["regeneration_rate"]
-    new_stock = min(remaining_stock + growth, FISH_POND_CONFIG["max_capacity"])
-
-    round.stock_at_end = new_stock
-    round.status = "calculated"
-    fish_game.current_stock = new_stock
-
-    # Move to next round or end game
-    if fish_game.current_round < FISH_POND_CONFIG["num_rounds"]:
-        fish_game.current_round += 1
-        next_round = FishPondRound(
-            game_id=fish_game.id,
-            round_number=fish_game.current_round,
-            status="open",
-            stock_at_start=new_stock,
-        )
-        db.add(next_round)
-        fish_game.status = "round_open"
-    else:
-        # Game ended
-        fish_game.status = "completed"
-        fish_game.completed_at = datetime.utcnow()
-
-    db.commit()
-
-    return {
-        "round_number": fish_game.current_round - 1,
-        "total_catch": total_catch,
-        "stock_at_end": new_stock,
-        "collapsed": False,
-        "message": f"Round {fish_game.current_round - 1} completed! Stock regenerated to {int(new_stock)}.",
-        "decisions": [
-            {
-                "player_id": d.player_id,
-                "player_name": db.query(Player)
-                .filter(Player.id == d.player_id)
-                .first()
-                .name,
-                "catch": d.catch_amount,
-                "score": d.round_score,
-            }
-            for d in decisions
-        ],
-        "game_ended": fish_game.status == "completed",
-    }
-
-
-@app.get(
-    "/api/games/fish-pond/{game_id}/results", response_model=FishPondResultResponse
-)
-def get_fish_pond_results(game_id: int, db: Session = Depends(get_db)):
-    """Get final Fish Pond game results"""
-    fish_game = db.query(FishPondGame).filter(FishPondGame.id == game_id).first()
-
-    if not fish_game:
-        raise HTTPException(status_code=404, detail="Fish Pond game not found")
-
-    # Get all decisions
-    all_decisions = (
-        db.query(PlayerFishingDecision)
-        .filter(PlayerFishingDecision.game_id == fish_game.id)
-        .all()
-    )
-
-    # Calculate final scores
-    final_scores = {}
-    for decision in all_decisions:
-        if decision.player_id not in final_scores:
-            player = db.query(Player).filter(Player.id == decision.player_id).first()
-            final_scores[decision.player_id] = {
-                "player_id": decision.player_id,
-                "player_name": player.name,
-                "total_catch": 0,
-            }
-        final_scores[decision.player_id]["total_catch"] += decision.catch_amount
-
-    # Get all rounds info
-    all_rounds = (
-        db.query(FishPondRound).filter(FishPondRound.game_id == fish_game.id).all()
-    )
-
-    rounds_data = [
-        {
-            "round_number": r.round_number,
-            "stock_at_start": r.stock_at_start,
-            "total_catch": r.total_catch,
-            "stock_at_end": r.stock_at_end,
-            "collapsed": r.collapsed,
-        }
-        for r in all_rounds
-    ]
-
-    return FishPondResultResponse(
-        game_id=fish_game.id,
-        completed=fish_game.status == "completed",
-        final_scores=sorted(
-            final_scores.values(), key=lambda x: x["total_catch"], reverse=True
-        ),
-        all_rounds=rounds_data,
-        game_collapsed=any(r.collapsed for r in all_rounds),
-    )
 
 
 # ==================== GENERAL ENDPOINTS ====================
