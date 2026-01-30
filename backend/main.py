@@ -47,9 +47,21 @@ app = FastAPI(
 )
 
 # CORS Configuration
+# In main.py, replace your current app.add_middleware block with this:
+
+origins = [
+    "http://localhost:3000",
+    "http://localhost:8000",
+    "https://think-twice-v03-48ksip9j6-think-twice-f383eaa5.vercel.app", # Exact Vercel URL
+]
+
+# Add any additional origins from your config
+if CORS_ORIGINS:
+    origins.extend([origin.strip() for origin in CORS_ORIGINS])
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=CORS_ORIGINS,
+    allow_origins=origins,  # Use the explicit list
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
