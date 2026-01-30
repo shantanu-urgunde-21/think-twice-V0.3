@@ -1,0 +1,154 @@
+from pydantic import BaseModel, Field
+from typing import Optional, List
+from datetime import datetime
+
+
+# Player Schemas
+class PlayerCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+
+
+class PlayerResponse(BaseModel):
+    id: int
+    name: str
+    total_score: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# Game Schemas
+class GameCreate(BaseModel):
+    name: str  # "two_thirds", "horse_race", "fish_pond"
+
+
+class GameResponse(BaseModel):
+    id: int
+    name: str
+    status: str
+    round_number: int
+    created_at: datetime
+    completed_at: Optional[datetime]
+
+    class Config:
+        from_attributes = True
+
+
+# Two-Thirds Game Schemas
+class TwoThirdsSubmissionCreate(BaseModel):
+    player_id: int
+    guess: int = Field(..., ge=0, le=100)
+
+
+class TwoThirdsSubmissionResponse(BaseModel):
+    id: int
+    player_id: int
+    guess: int
+    submitted_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class TwoThirdsRoundResponse(BaseModel):
+    id: int
+    round_number: int
+    status: str
+    average: Optional[float]
+    two_thirds_average: Optional[float]
+    winner_id: Optional[int]
+    submissions_count: int
+
+    class Config:
+        from_attributes = True
+
+
+class TwoThirdsResultResponse(BaseModel):
+    round_id: int
+    average: float
+    two_thirds_average: float
+    winner_id: Optional[int]
+    winner_name: Optional[str]
+    all_guesses: List[dict]
+
+
+# Horse Race Game Schemas
+class HorseRaceStart(BaseModel):
+    player_id: int
+
+
+class HorseSelectionSubmit(BaseModel):
+    player_id: int
+    selected_horse_ids: List[int] = Field(..., min_length=5, max_length=5)
+
+
+class HorseRaceRoundResult(BaseModel):
+    round_number: int
+    selected_horses: List[dict]
+    race_results: List[dict]
+    message: str
+
+
+class HorseRaceAttemptResponse(BaseModel):
+    id: int
+    player_id: int
+    round_number: int
+    total_rounds_used: int
+    completed: bool
+    identified_top_three: bool
+
+    class Config:
+        from_attributes = True
+
+
+# Leaderboard Schema
+class LeaderboardEntry(BaseModel):
+    rank: int
+    player_id: int
+    player_name: str
+    total_score: int
+
+    class Config:
+        from_attributes = True
+
+
+# Fish Pond Game Schemas
+class FishPondSubmitCatch(BaseModel):
+    player_id: int
+    catch_amount: int = Field(..., ge=0)
+
+
+class FishPondRoundResponse(BaseModel):
+    round_number: int
+    status: str
+    stock_at_start: int
+    total_catch: int
+    stock_at_end: Optional[int]
+    collapsed: bool
+    decisions: List[dict]  # List of player decisions for this round
+
+    class Config:
+        from_attributes = True
+
+
+class FishPondGameResponse(BaseModel):
+    id: int
+    game_id: int
+    initial_stock: int
+    current_stock: int
+    max_capacity: int
+    current_round: int
+    status: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class FishPondResultResponse(BaseModel):
+    game_id: int
+    completed: bool
+    final_scores: List[dict]  # List of {player_id, player_name, total_score}
+    all_rounds: List[dict]
+    game_collapsed: bool

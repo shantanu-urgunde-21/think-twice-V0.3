@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Think Twice - Game Theory Platform</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <h1>Think Twice</h1>
+            <div id="headerControls">
+                <button id="adminLoginBtn" onclick="showAdminLogin()" class="admin-toggle-btn">Admin Login</button>
+                <button id="adminLogoutBtn" onclick="logoutAdmin()" class="admin-toggle-btn" style="display: none;">Admin Logout</button>
+            </div>
+        </header>
+
+        <!-- Admin Login Modal -->
+        <div id="adminLoginModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <span class="close" onclick="closeAdminLogin()">&times;</span>
+                <h2>Admin Login</h2>
+                <form id="adminLoginForm">
+                    <input type="text" id="adminUsername" placeholder="Username" required autocomplete="username">
+                    <input type="password" id="adminPassword" placeholder="Password" required autocomplete="current-password">
+                    <button type="submit">Login</button>
+                </form>
+                <div id="adminLoginError" class="error" style="display: none;"></div>
+            </div>
+        </div>
+
+        <!-- Home View (Player Registration + Leaderboard) -->
+        <div id="homeView">
+            <!-- Player Registration -->
+            <section id="registration" class="section">
+                <h2>Player Registration</h2>
+                <form id="registerForm">
+                    <input type="text" id="playerName" placeholder="Enter your name" required>
+                    <button type="submit">Register</button>
+                </form>
+                <div id="playerSelect" style="margin-top: 20px; display: none;">
+                    <label>Or select existing player:</label>
+                    <select id="existingPlayers">
+                        <option value="">Choose player...</option>
+                    </select>
+                    <button onclick="selectPlayer()">Select</button>
+                </div>
+                <div id="currentPlayer" style="display: none; margin-top: 20px;">
+                    <p>Playing as: <strong id="currentPlayerName"></strong></p>
+                    <button onclick="logout()">Change Player</button>
+                </div>
+            </section>
+
+            <!-- Leaderboard (Only on home page) -->
+            <section id="leaderboard" class="section">
+                <h2>Leaderboard</h2>
+                <div id="leaderboardContent"></div>
+            </section>
+
+            <!-- Game Selection -->
+            <section id="gameSelection" class="section" style="display: none;">
+                <h2>Select a Game</h2>
+                <div class="game-buttons">
+                    <button onclick="startGame('two-thirds')" class="game-btn">2/3 of Average</button>
+                    <button onclick="startGame('horse-race')" class="game-btn">Horse Racing</button>
+                    <button onclick="startGame('fish-pond')" class="game-btn">Fish Pond</button>
+                </div>
+            </section>
+        </div>
+
+        <!-- Two-Thirds Game View -->
+        <section id="twoThirdsGame" class="section game-view" style="display: none;">
+            <h2>2/3 of the Average Game</h2>
+            <div id="twoThirdsContent">
+                <p>Each player guesses a number between 0 and 100. The winner is the player whose guess is closest to 2/3 of the average of all guesses.</p>
+                
+                <form id="twoThirdsForm">
+                    <label>Your Guess (0-100):</label>
+                    <input type="number" id="twoThirdsGuess" min="0" max="100" required>
+                    <button type="submit">Submit Guess</button>
+                </form>
+                
+                <div id="twoThirdsWaiting" style="display: none;">
+                    <p>Waiting for other players...</p>
+                    <p>Submissions: <span id="submissionCount">0</span></p>
+                    <button onclick="calculateTwoThirds()" class="admin-action" style="display: none;">Calculate Results</button>
+                </div>
+                
+                <div id="twoThirdsResults" style="display: none;"></div>
+            </div>
+            <button onclick="backToHome()" class="back-btn">Back to Home</button>
+        </section>
+
+        <!-- Horse Race Game View -->
+        <section id="horseRaceGame" class="section game-view" style="display: none;">
+            <h2>Horse Racing Game</h2>
+            <div id="horseRaceContent">
+                <p>Goal: Identify the 3 fastest horses from 25 horses using minimum rounds. Each round, select 5 horses to race.</p>
+                <p>Round: <strong id="currentRound">1</strong></p>
+
+                <div id="horseSelection">
+                    <h3>Select 5 Horses to Race</h3>
+                    <div id="horseList" class="horse-grid"></div>
+                    <button onclick="raceSelectedHorses()" id="raceBtn" disabled>Race Horses</button>
+                </div>
+
+                <div id="raceResults" style="display: none;">
+                    <h3>Race Results</h3>
+                    <div id="resultsDisplay"></div>
+                    <button onclick="nextRound()">Next Round</button>
+                </div>
+
+                <div id="finalSubmission">
+                    <h3>Submit Your Answer</h3>
+                    <p>Think you know the top 3? Submit your answer:</p>
+                    <div id="topThreeSelection">
+                        <select id="first"></select>
+                        <select id="second"></select>
+                        <select id="third"></select>
+                    </div>
+                    <button onclick="submitTopThree()">Submit Top 3</button>
+                </div>
+
+                <div id="horseRaceFinalResults" style="display: none;"></div>
+            </div>
+            <button onclick="backToHome()" class="back-btn">Back to Home</button>
+        </section>
+
+        <!-- Fish Pond Game View -->
+        <section id="fishPondGame" class="section game-view" style="display: none;">
+            <h2>Fish Pond Game</h2>
+            <div id="fishPondContent">
+                <p>Goal: Maximize your catch while being mindful of the pond's stock. If the pond is overfished, everyone loses!</p>
+
+                <div id="fishPondStatus">
+                    <div class="status-grid">
+                        <div class="status-item">
+                            <label>Current Round:</label>
+                            <span id="fpRoundNumber">1</span> / 5
+                        </div>
+                        <div class="status-item">
+                            <label>Fish in Pond:</label>
+                            <span id="fpStockAmount">100</span>
+                        </div>
+                        <div class="status-item">
+                            <label>Players Submitted:</label>
+                            <span id="fpSubmittedCount">0</span> / <span id="fpTotalPlayers">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="fishPondInput" style="margin-top: 20px;">
+                    <form id="fishPondForm">
+                        <label>How many fish to catch? (0-20):</label>
+                        <input type="number" id="fpCatchAmount" min="0" max="20" required>
+                        <button type="submit">Submit Catch</button>
+                    </form>
+                </div>
+
+                <div id="fishPondWaiting" style="display: none; margin-top: 20px;">
+                    <p>Waiting for other players to submit their catches...</p>
+                    <p id="pendingPlayers"></p>
+                    <button onclick="calculateFishPondRound()" class="admin-action" style="display: none;">Calculate Round</button>
+                </div>
+
+                <div id="fishPondRoundResults" style="display: none; margin-top: 20px;">
+                    <h3>Round Results</h3>
+                    <div id="roundResultsDisplay"></div>
+                    <button onclick="nextFishPondRound()">Next Round</button>
+                </div>
+
+                <div id="fishPondGameOver" style="display: none; margin-top: 20px;">
+                    <h3>Game Over!</h3>
+                    <div id="finalResultsDisplay"></div>
+                    <button onclick="backToHome()">Back to Home</button>
+                </div>
+            </div>
+            <button onclick="backToHome()" class="back-btn">Back to Home</button>
+        </section>
+
+        <!-- Admin Panel (Only visible when logged in as admin) -->
+        <section id="adminPanel" class="section" style="display: none;">
+            <h2>Admin Controls</h2>
+            <div class="admin-controls">
+                <div class="admin-control-group">
+                    <h3>Game Management</h3>
+                    <button onclick="startTwoThirdsGameAdmin()" class="admin-btn">Start Two-Thirds Game</button>
+                    <button onclick="startFishPondGameAdmin()" class="admin-btn">Start Fish Pond Game</button>
+                </div>
+                <div class="admin-control-group">
+                    <h3>Player Management</h3>
+                    <div id="playerManagement"></div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <div id="notification" class="notification"></div>
+
+    <script src="script.js"></script>
+</body>
+</html>
