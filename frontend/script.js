@@ -165,7 +165,7 @@ function logout() {
     document.getElementById('registration').style.display = 'block';
     document.getElementById('currentPlayer').style.display = 'none';
     document.getElementById('gameSelection').style.display = 'none';
-    backToMenu();
+    backToHome();
 }
 
 // Leaderboard
@@ -427,3 +427,4 @@ function startGame(gameType) {
         startFishPondGame();
     }
 }
+
