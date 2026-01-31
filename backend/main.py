@@ -421,6 +421,24 @@ def start_horse_race(player_data: HorseRaceStart, db: Session = Depends(get_db))
     if not player:
         raise HTTPException(404, "Player not found")
 
+    # CHECK: Count how many horse race games this player has completed
+    completed_games = (
+        db.query(HorseRaceAttempt)
+        .filter(
+            HorseRaceAttempt.player_id == player_data.player_id,
+            HorseRaceAttempt.completed == True,
+        )
+        .distinct(HorseRaceAttempt.game_id)
+        .count()
+    )
+
+    # LIMIT: Prevent starting if already completed 2 games
+    if completed_games >= 2:
+        raise HTTPException(
+            status_code=403,
+            detail=f"You have completed the maximum 2 Horse Race games. You cannot play anymore.",
+        )
+
     game = Game(name="horse_race", status="active")
     db.add(game)
     db.commit()
@@ -436,6 +454,27 @@ def start_horse_race(player_data: HorseRaceStart, db: Session = Depends(get_db))
         "game_id": horse_game.id,
         "message": "Horse race started!",
         "total_horses": HORSE_RACE_CONFIG["num_horses"],
+        "games_completed": completed_games,
+    }
+
+
+@app.get("/api/games/horse-race/player-status/{player_id}")
+def get_player_horse_status(player_id: int, db: Session = Depends(get_db)):
+    """Check how many horse race games player has completed"""
+    completed_games = (
+        db.query(HorseRaceAttempt)
+        .filter(
+            HorseRaceAttempt.player_id == player_id, HorseRaceAttempt.completed == True
+        )
+        .distinct(HorseRaceAttempt.game_id)
+        .count()
+    )
+
+    return {
+        "player_id": player_id,
+        "games_completed": completed_games,
+        "games_remaining": max(0, 2 - completed_games),
+        "can_play": completed_games < 2,
     }
 
 
