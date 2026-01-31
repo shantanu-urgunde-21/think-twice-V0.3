@@ -169,14 +169,39 @@ def get_leaderboard(db: Session = Depends(get_db)):
 def start_two_thirds(
     db: Session = Depends(get_db), admin: str = Depends(require_admin)
 ):
+    # First, mark any completed games as finished
+    completed_games = (
+        db.query(Game)
+        .filter(Game.name == "two_thirds", Game.status == "completed")
+        .all()
+    )
+    for g in completed_games:
+        g.status = "finished"
+    db.commit()
+
+    # Check if there's already an active game with open rounds
     existing = (
         db.query(Game)
         .filter(Game.name == "two_thirds", Game.status == "active")
         .first()
     )
     if existing:
-        raise HTTPException(400, "Active game already exists")
+        # Check if it has open rounds
+        open_round = (
+            db.query(TwoThirdsRound)
+            .filter(
+                TwoThirdsRound.game_id == existing.id, TwoThirdsRound.status == "open"
+            )
+            .first()
+        )
+        if open_round:
+            raise HTTPException(400, "Active game already exists")
+        else:
+            # No open round, so this game is orphaned - mark it as finished
+            existing.status = "finished"
+            db.commit()
 
+    # Now create the new game
     game = Game(name="two_thirds", status="active")
     db.add(game)
     db.commit()
@@ -329,7 +354,7 @@ def calculate_two_thirds(
 def close_two_thirds(
     game_id: int, db: Session = Depends(get_db), admin: str = Depends(require_admin)
 ):
-    """Close the game and create a new round for next game"""
+    """Close the game and all its rounds"""
     game = db.query(Game).filter(Game.id == game_id).first()
     if not game:
         raise HTTPException(404, "Game not found")
@@ -346,20 +371,8 @@ def close_two_thirds(
     for r in open_rounds:
         r.status = "closed"
 
-    # Create a new game and round for next round
-    new_game = Game(name="two_thirds", status="active")
-    db.add(new_game)
     db.commit()
-    db.refresh(new_game)
-
-    new_round = TwoThirdsRound(game_id=new_game.id, round_number=1, status="open")
-    db.add(new_round)
-    db.commit()
-
-    return {
-        "message": "Game closed successfully and new game started",
-        "new_game_id": new_game.id,
-    }
+    return {"message": "Game closed successfully. You can start a new game now."}
 
 
 @app.get("/api/admin/game-stats/{game_id}")
