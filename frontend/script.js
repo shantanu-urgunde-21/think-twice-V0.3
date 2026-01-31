@@ -87,8 +87,10 @@ async function apiCall(endpoint, method = 'GET', data = null) {
 async function loadStats() {
     try {
         const stats = await apiCall('/stats');
-        document.getElementById('playerCount').textContent = `${stats.total_players}/${stats.max_players}`;
-        document.getElementById('activeGames').textContent = stats.active_games;
+        const playerCountEl = document.getElementById('playerCount');
+        const activeGamesEl = document.getElementById('activeGames');
+        if (playerCountEl) playerCountEl.textContent = `${stats.total_players}/${stats.max_players}`;
+        if (activeGamesEl) activeGamesEl.textContent = stats.active_games;
     } catch (error) {
         console.error('Error loading stats:', error);
     }
@@ -427,4 +429,3 @@ function startGame(gameType) {
         startFishPondGame();
     }
 }
-
