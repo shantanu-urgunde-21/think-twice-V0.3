@@ -147,6 +147,7 @@
           .getElementById("adminLoginForm")
           ?.addEventListener("submit", handleAdminLogin);
         startHorseRaceGame();
+        updateAdminUI(); // Show/hide admin buttons
       });
 
       async function apiCall(endpoint, method = "GET", data = null) {

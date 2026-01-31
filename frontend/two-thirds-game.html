@@ -153,6 +153,7 @@
 
         startTwoThirdsGameUI();
         setInterval(updateSubmissionCount, 3000); // Auto-refresh every 3s
+        updateAdminUI(); // Show/hide admin buttons
       });
 
       async function apiCall(endpoint, method = "GET", data = null) {
@@ -287,10 +288,28 @@
       }
 
       async function closeGame() {
+        if (!isAdmin) {
+          showNotification("Admin access required", "error");
+          return;
+        }
+
+        // Check if we have results
+        const hasResults =
+          document.getElementById("twoThirdsResults").style.display !== "none";
+
+        if (!hasResults) {
+          showNotification(
+            "Please calculate results before closing the game!",
+            "error",
+          );
+          return;
+        }
+
         if (
           !confirm("Close this game? Players won't be able to submit anymore.")
-        )
+        ) {
           return;
+        }
 
         try {
           await apiCall(`/games/two-thirds/${currentGameId}/close`, "POST");
