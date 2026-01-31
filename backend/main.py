@@ -255,8 +255,10 @@ def submit_two_thirds_guess(
     return {"success": True, "message": "Guess submitted"}
 
 
-@app.post("/api/games/two-thirds/{game_id}/calculate", response_model=TwoThirdsResultResponse)
-def calculate_two_thirds_round(
+@app.post(
+    "/api/games/two-thirds/{game_id}/calculate", response_model=TwoThirdsResultResponse
+)
+def calculate_two_thirds(
     game_id: int, db: Session = Depends(get_db), admin: str = Depends(require_admin)
 ):
     round = (
@@ -275,13 +277,10 @@ def calculate_two_thirds_round(
     if not submissions:
         raise HTTPException(400, "No submissions")
 
-    # 1. Calculate Statistics
     guesses = [s.guess for s in submissions]
     average = sum(guesses) / len(guesses)
     two_thirds_avg = (2 / 3) * average
 
-    # 2. Identify the Winner (closest player)
-    # We still track the "winner" for the database record, even if everyone gets points
     winner = min(submissions, key=lambda s: abs(s.guess - two_thirds_avg))
 
     round.average = average
@@ -289,52 +288,48 @@ def calculate_two_thirds_round(
     round.winner_id = winner.player_id
     round.status = "calculated"
 
-    # 3. Calculate and Award Points for Everyone
-    # Formula: Max Points (e.g., 100) minus the absolute distance from the target.
-    # We use max(0, ...) to ensure no one gets negative points.
-    MAX_POINTS = 100 
+    winner_player = db.query(Player).filter(Player.id == winner.player_id).first()
+    winner_player.total_score += TWO_THIRDS_CONFIG["winner_points"]
+
+    # Award 1 point to everyone else for participation
+    for submission in submissions:
+        if submission.player_id != winner.player_id:
+            player = db.query(Player).filter(Player.id == submission.player_id).first()
+            player.total_score += 1
+
+    db.commit()
 
     all_guesses = []
-    
-    for submission in submissions:
-        # Calculate distance
-        distance = abs(submission.guess - two_thirds_avg)
-        
-        # Calculate score: Closer guess = higher score
-        # Example: Target 33. Guess 33 -> 100 pts. Guess 43 -> 90 pts.
-        points = max(0, int(MAX_POINTS - distance))
-        
-        # Update Player Score in DB
-        player = db.query(Player).filter(Player.id == submission.player_id).first()
-        player.total_score += points
-        
-        # Add to response list
+    for s in submissions:
+        player = db.query(Player).filter(Player.id == s.player_id).first()
+        points = (
+            TWO_THIRDS_CONFIG["winner_points"] if s.player_id == winner.player_id else 1
+        )
         all_guesses.append(
             {
-                "player_id": submission.player_id,
+                "player_id": s.player_id,
                 "player_name": player.name,
-                "guess": submission.guess,
-                "distance": distance,
+                "guess": s.guess,
+                "distance": abs(s.guess - two_thirds_avg),
                 "points": points,
             }
         )
-
-    db.commit()
 
     return TwoThirdsResultResponse(
         round_id=round.id,
         average=average,
         two_thirds_average=two_thirds_avg,
         winner_id=winner.player_id,
-        winner_name=db.query(Player).filter(Player.id == winner.player_id).first().name,
+        winner_name=winner_player.name,
         all_guesses=sorted(all_guesses, key=lambda x: x["distance"]),
     )
+
 
 @app.post("/api/games/two-thirds/{game_id}/close")
 def close_two_thirds(
     game_id: int, db: Session = Depends(get_db), admin: str = Depends(require_admin)
 ):
-    """Close the game - prevents new submissions"""
+    """Close the game and create a new round for next game"""
     game = db.query(Game).filter(Game.id == game_id).first()
     if not game:
         raise HTTPException(404, "Game not found")
@@ -351,8 +346,20 @@ def close_two_thirds(
     for r in open_rounds:
         r.status = "closed"
 
+    # Create a new game and round for next round
+    new_game = Game(name="two_thirds", status="active")
+    db.add(new_game)
     db.commit()
-    return {"message": "Game closed successfully"}
+    db.refresh(new_game)
+
+    new_round = TwoThirdsRound(game_id=new_game.id, round_number=1, status="open")
+    db.add(new_round)
+    db.commit()
+
+    return {
+        "message": "Game closed successfully and new game started",
+        "new_game_id": new_game.id,
+    }
 
 
 @app.get("/api/admin/game-stats/{game_id}")
@@ -575,7 +582,7 @@ def submit_top_three(game_id: int, data: dict, db: Session = Depends(get_db)):
     )
 
     if is_correct:
-        score = max(100 - (rounds_used * 5), 10)
+        score = max(50 - (rounds_used * 5), 10)
         player = db.query(Player).filter(Player.id == player_id).first()
         player.total_score += score
 
@@ -604,7 +611,6 @@ def submit_top_three(game_id: int, data: dict, db: Session = Depends(get_db)):
             ],
         }
     else:
-        rounds_used = rounds_used + 2
         return {
             "correct": False,
             "rounds_used": rounds_used,
@@ -655,4 +661,3 @@ def get_stats(db: Session = Depends(get_db)):
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
-
