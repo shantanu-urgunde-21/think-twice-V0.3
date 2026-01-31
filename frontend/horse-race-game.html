@@ -187,6 +187,27 @@
 
       async function startHorseRaceGame() {
         try {
+          // Check player's game status first
+          const status = await apiCall(
+            `/games/horse-race/player-status/${currentPlayer.id}`,
+          );
+
+          if (!status.can_play) {
+            showNotification(
+              `You have completed the maximum 2 Horse Race games. You cannot play anymore.`,
+              "error",
+            );
+            return;
+          }
+
+          // Show remaining games if any
+          if (status.games_remaining <= 1 && status.games_completed > 0) {
+            showNotification(
+              `Warning: You have ${status.games_remaining} game(s) remaining.`,
+              "warning",
+            );
+          }
+
           const result = await apiCall("/games/horse-race/start", "POST", {
             player_id: currentPlayer.id,
           });
