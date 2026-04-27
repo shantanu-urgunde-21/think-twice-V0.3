@@ -1,8 +1,8 @@
-# Think Twice - Game Theory Platform v3.0
+# Think Twice - Game Theory Platform v0.3
 
 A production-ready web platform for conducting game theory experiments with up to 40 participants.
 
-## ✨ What's New in v3.0
+## ✨ What's New in v0.3
 
 ### Production Ready
 - ✅ **Railway Deployment**: One-click deployment to Railway
