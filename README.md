@@ -1,8 +1,8 @@
-# Think Twice - Game Theory Platform v2.0
+# Think Twice - Game Theory Platform v3.0
 
 A production-ready web platform for conducting game theory experiments with up to 40 participants.
 
-## ✨ What's New in v2.0
+## ✨ What's New in v3.0
 
 ### Production Ready
 - ✅ **Railway Deployment**: One-click deployment to Railway
@@ -152,7 +152,7 @@ const API_URL = 'https://your-backend.railway.app/api';
 ## 📁 Project Structure
 
 ```
-game-theory-v2/
+game-theory-v3/
 ├── backend/
 │   ├── main.py              # FastAPI app with all endpoints
 │   ├── auth.py              # JWT authentication
