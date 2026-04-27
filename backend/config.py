@@ -5,10 +5,10 @@ load_dotenv()
 
 # Admin Configuration
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")  # Change in production!
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 
 # JWT Configuration
-SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
+SECRET_KEY = os.getenv("SECRET_KEY", "secret-key")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 480  # 8 hours
 
@@ -27,7 +27,7 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 DEFAULT_CORS = [
     "http://localhost:3000",
     "http://localhost:8000",
-    "https://think-twice-v03.vercel.app",  # Updated to match your actual Vercel URL
+    "https://think-twice-v03.vercel.app",
 ]
 if FRONTEND_URL not in DEFAULT_CORS:
     DEFAULT_CORS.append(FRONTEND_URL)

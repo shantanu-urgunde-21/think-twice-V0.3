@@ -46,8 +46,7 @@ def authenticate_admin(username: str, password: str) -> bool:
     """Authenticate admin credentials"""
     if username != ADMIN_USERNAME:
         return False
-    # In production, compare against hashed password
-    # For now, direct comparison (you should hash ADMIN_PASSWORD in production)
+    # direct comparison (hash ADMIN_PASSWORD later)
     return password == ADMIN_PASSWORD
 
 
