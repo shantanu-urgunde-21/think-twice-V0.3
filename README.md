@@ -1,20 +1,16 @@
 # Think Twice - Game Theory Platform v0.3
 
-A production-ready web platform for conducting game theory experiments with up to 40 participants.
+A web platform for conducting game theory experiments.
 
-## ✨ What's New in v0.3
-
-### Production Ready
-- ✅ **Railway Deployment**: One-click deployment to Railway
-- ✅ **Admin Authentication**: JWT-based admin panel with secure login
-- ✅ **PostgreSQL**: Production database with proper connection pooling
-- ✅ **Better UX**: Leaderboard only on home page, cleaner game views
-- ✅ **Error Handling**: Comprehensive error handling and validation
-- ✅ **Security**: CORS configuration, environment variables, secure credentials
+-  **Railway Deployment**: One-click deployment to Railway
+-  **Admin Authentication**: JWT-based admin panel with secure login
+-  **PostgreSQL**: Production database with proper connection pooling
+-  **Better UX**: Leaderboard only on home page, cleaner game views
+-  **Error Handling**: Comprehensive error handling and validation
+-  **Security**: CORS configuration, environment variables, secure credentials
 
 ### Features
 - **3 Games**: Two-Thirds Average, Horse Racing, Fish Pond
-- **40 Players**: Support for up to 40 concurrent players
 - **Admin Panel**: Protected game management and player administration
 - **Leaderboard**: Real-time global scoring system
 - **Responsive**: Works on desktop and mobile
@@ -214,21 +210,6 @@ python -m http.server 3000
 
 ---
 
-## 🔐 Security
-
-### Default Credentials (CHANGE THESE!)
-- Admin Username: `admin`
-- Admin Password: `changeme123`
-
-### Production Checklist
-- ✅ Change admin password
-- ✅ Set strong SECRET_KEY (32+ random chars)
-- ✅ Configure CORS_ORIGINS properly
-- ✅ Use HTTPS (automatic on Railway/Vercel)
-- ✅ Regular database backups
-
----
-
 ## 📊 API Endpoints
 
 ### Public Endpoints
@@ -326,7 +307,7 @@ Built for conducting game theory experiments in educational settings.
 ---
 
 ## 📞 Support
-
+- **Mail**: urgundeshantanu@gmail.com
 - **Deployment Issues**: Check [RAILWAY_DEPLOYMENT.md](docs/RAILWAY_DEPLOYMENT.md)
 - **API Questions**: Visit `/docs` endpoint
 - **Game Rules**: See game descriptions above
