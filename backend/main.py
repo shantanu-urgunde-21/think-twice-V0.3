@@ -568,7 +568,7 @@ def race_horses(
         "message": f"Round {round_number}: {race_results[0]['name']} was fastest!",
     }
 
-
+# passing dict as parameter - app accepts any json object, it must be handled manually.
 @app.post("/api/games/horse-race/{game_id}/submit-top-three")
 def submit_top_three(game_id: int, data: dict, db: Session = Depends(get_db)):
     player_id = data.get("player_id")

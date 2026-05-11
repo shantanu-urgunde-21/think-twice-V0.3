@@ -1,0 +1,10 @@
+studydocs/
+__pycache__/
+backend/venv/
+frontend/venv/
+*.py[cod]
+*.pyo
+venv/
+.venv/
+.env
+.vscode/

@@ -3,6 +3,9 @@
 Here is the ER diagram representing the schema defined in `backend/database.py`.
 
 ```mermaid
+---
+id: 485e1107-30d1-4126-92d5-c65fdcfd17a7
+---
 erDiagram
     players ||--o{ game_participations : "participates in"
     players ||--o{ two_thirds_submissions : "submits"
@@ -19,7 +22,7 @@ erDiagram
     games ||--o{ game_round_analytics : "has analytics"
 
     two_thirds_rounds ||--o{ two_thirds_submissions : "has submissions"
-    
+
     horse_race_games ||--o{ horse_race_attempts : "has attempts"
 
     players {
