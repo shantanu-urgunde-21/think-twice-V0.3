@@ -24,6 +24,14 @@ Base = declarative_base()
 
 
 # Models
+class AdminUser(Base):
+    __tablename__ = "admin_users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True, nullable=False, index=True)
+    hashed_password = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 class Player(Base):
     __tablename__ = "players"
 
@@ -234,5 +242,19 @@ def init_db():
             ]
             db.add_all(games)
             db.commit()
+            
+        # Seed initial admin user if none exists
+        from auth import get_password_hash
+        from config import ADMIN_USERNAME, ADMIN_PASSWORD
+        
+        admin_count = db.query(AdminUser).count()
+        if admin_count == 0:
+            admin = AdminUser(
+                username=ADMIN_USERNAME,
+                hashed_password=get_password_hash(ADMIN_PASSWORD)
+            )
+            db.add(admin)
+            db.commit()
+            
     finally:
         db.close()

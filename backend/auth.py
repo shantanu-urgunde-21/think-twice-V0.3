@@ -42,12 +42,13 @@ def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 
-def authenticate_admin(username: str, password: str) -> bool:
-    """Authenticate admin credentials"""
-    if username != ADMIN_USERNAME:
+def authenticate_admin(username: str, password: str, db) -> bool:
+    """Authenticate admin credentials against database"""
+    from database import AdminUser
+    admin = db.query(AdminUser).filter(AdminUser.username == username).first()
+    if not admin:
         return False
-    # direct comparison (hash ADMIN_PASSWORD later)
-    return password == ADMIN_PASSWORD
+    return verify_password(password, admin.hashed_password)
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
