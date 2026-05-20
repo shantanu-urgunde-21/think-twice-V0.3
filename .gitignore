@@ -1,0 +1,7 @@
+venv/
+__pycache__/
+*.pyc
+.env
+backend/venv/
+backend/__pycache__/
+studydocs/
