@@ -150,7 +150,7 @@ const API_URL = 'https://your-backend.railway.app/api';
 This platform uses a decoupled three-tier architecture configured for quick deployment to Vercel (Frontend) and Railway (Backend API & PostgreSQL database).
 
 ```mermaid
-flowchart LR
+flowchart TD
   %% Style Definitions
   classDef frontend fill:#e0f2fe,stroke:#0284c7,stroke-width:2px,color:#0369a1,font-size:16px
   classDef backend fill:#d1fae5,stroke:#059669,stroke-width:2px,color:#065f46,font-size:16px
