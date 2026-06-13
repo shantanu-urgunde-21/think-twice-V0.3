@@ -145,6 +145,83 @@ const API_URL = 'https://your-backend.railway.app/api';
 
 ---
 
+## 🏗️ System Architecture & Data Flow
+
+This platform uses a decoupled three-tier architecture configured for quick deployment to Vercel (Frontend) and Railway (Backend API & PostgreSQL database).
+
+```mermaid
+flowchart LR
+  %% Style Definitions
+  classDef frontend fill:#e0f2fe,stroke:#0284c7,stroke-width:2px,color:#0369a1,font-size:16px
+  classDef backend fill:#d1fae5,stroke:#059669,stroke-width:2px,color:#065f46,font-size:16px
+  classDef database fill:#f3e8ff,stroke:#7c3aed,stroke-width:2px,color:#5b21b6,font-size:16px,font-weight:bold
+  classDef public_api fill:#ffedd5,stroke:#ea580c,stroke-width:2px,color:#c2410c,font-size:15px
+  classDef admin_api fill:#fce7f3,stroke:#db2777,stroke-width:2px,color:#9d174d,font-size:15px
+
+  %% FRONTEND TIER (Vercel)
+  subgraph Frontend_App ["Frontend App (Vercel)"]
+    UI_Player["Participant Interface<br/>(Registration, Game Play, Leaderboard)"]:::frontend
+    UI_Admin["Admin Panel<br/>(JWT-protected Game & Player Controls)"]:::frontend
+  end
+
+  %% API ENDPOINTS TIER
+  subgraph Public_Endpoints ["Public Endpoints"]
+    Endpoint_Reg["POST /api/players<br/>(Register Player)"]:::public_api
+    Endpoint_Submit["POST /api/games/{game}/submit<br/>(Submit Move)"]:::public_api
+    Endpoint_Leaderboard["GET /api/leaderboard<br/>(Rankings)"]:::public_api
+  end
+
+  subgraph Admin_Endpoints ["Admin Endpoints (JWT Protected)"]
+    Endpoint_Login["POST /api/auth/login<br/>(JWT Authentication)"]:::admin_api
+    Endpoint_Start["POST /api/games/{game}/start<br/>(Start Game/Round)"]:::admin_api
+    Endpoint_Calc["POST /api/games/{game}/calculate<br/>(Compute Results)"]:::admin_api
+  end
+
+  %% Connect Frontend to Endpoints
+  UI_Player -->|Register| Endpoint_Reg
+  UI_Player -->|Play Game| Endpoint_Submit
+  UI_Player -->|View rankings| Endpoint_Leaderboard
+
+  UI_Admin -->|Login with credentials| Endpoint_Login
+  UI_Admin -->|Initialize Game| Endpoint_Start
+  UI_Admin -->|Calculate scores| Endpoint_Calc
+
+  %% BACKEND TIER (FastAPI on Railway)
+  subgraph Backend_API ["Backend API (FastAPI on Railway)"]
+    FastAPI["FastAPI App (main.py)"]:::backend
+    JWTAuth["JWT Authenticator (auth.py)"]:::backend
+    PydanticSchemas["Pydantic Validation (schemas.py)"]:::backend
+    SQLAlchemy["SQLAlchemy ORM (database.py)"]:::backend
+
+    subgraph Game_Logic ["Game Engines"]
+      Logic_TwoThirds["Two-Thirds Average Logic<br/>(Guess closest to 2/3 of average)"]:::backend
+      Logic_Horses["Horse Racing Simulation<br/>(Select 5 of 25 / Find Top 3)"]:::backend
+      Logic_FishPond["Fish Pond Commons Dilemma<br/>(Catch 0-20 / Pond Regenerates 50%)"]:::backend
+    end
+  end
+
+  %% Connect Endpoints to Backend Router
+  Endpoint_Reg & Endpoint_Submit & Endpoint_Leaderboard --> FastAPI
+  Endpoint_Login --> JWTAuth
+  Endpoint_Start & Endpoint_Calc --> FastAPI
+  JWTAuth -.->|Verify token| FastAPI
+
+  FastAPI --> PydanticSchemas
+  FastAPI <-->|Execute rules| Game_Logic
+  FastAPI --> SQLAlchemy
+
+  %% DATABASE TIER (PostgreSQL on Railway)
+  subgraph Database_Tier ["Database Tier (PostgreSQL)"]
+    Table_Player["Table: players<br/>(ID, Name, Total Score)"]:::database
+    Table_Game["Table: game_sessions<br/>(Active state, Round count)"]:::database
+    Table_Submission["Table: submissions<br/>(Chosen moves, Round scores)"]:::database
+  end
+
+  SQLAlchemy <-->|Connection Pool / CRUD| Database_Tier
+```
+
+---
+
 ## 📁 Project Structure
 
 ```
