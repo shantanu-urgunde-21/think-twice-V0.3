@@ -3,25 +3,46 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src *; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' 'unsafe-inline';" />
     <title>Horse Racing - Think Twice</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
     <div class="container">
-      <header>
-        <h1>Horse Racing Game</h1>
+      <header class="retro-header">
+        <div class="header-left">
+          <div class="logo-box">T2</div>
+          <div class="brand-text">
+            <span class="brand-title">THINK TWICE</span>
+            <span class="brand-subtitle">GAME THEORY PLATFORM</span>
+          </div>
+        </div>
+
+        <nav class="nav-links">
+          <a href="index.html" class="nav-link">HOME</a>
+          <a href="two-thirds-game.html" class="nav-link">2/3 AVERAGE</a>
+          <a href="horse-race-game.html" class="nav-link active">HORSE RACING</a>
+          <a href="fish-pond-game.html" class="nav-link">FISH POND</a>
+        </nav>
+
         <div id="headerControls">
-          <span
-            id="playerDisplay"
-            style="margin-right: 15px; color: #333"
-          ></span>
+          <div id="playerBadge" class="player-badge" style="display: none; margin-right: 10px;">
+            <span>👤</span>
+            <span id="playerDisplayName"></span>
+            <span id="playerDisplayPIN" class="badge-pin"></span>
+          </div>
           <button
             id="logoutPlayerBtn"
             onclick="logoutPlayer()"
-            style="display: none; margin-right: 10px; background: #6c757d"
+            style="display: none; margin-right: 10px;"
+            class="admin-toggle-btn"
           >
             Logout
           </button>
+          <span id="adminBadge" style="display: none;" class="admin-badge">⚙️ ADMIN MODE</span>
           <button
             id="adminLoginBtn"
             onclick="showAdminLogin()"
@@ -116,20 +137,20 @@
 
     <div id="notification" class="notification"></div>
 
-    <script>
-      const API_URL = (() => {
-        if (window.BACKEND_URL) return window.BACKEND_URL;
-        if (window.location.hostname === "localhost")
-          return "http://localhost:8000/api";
-        return "https://think-twice-v03-production.up.railway.app/api";
-      })();
+    <!-- Floating Widgets -->
+    <div class="floating-widget">
+      <div class="widget-item terminal-widget" title="Terminal Access">
+        <span class="widget-icon">&gt;_</span>
+      </div>
+      <div class="widget-item trophy-widget" title="Back to Home" onclick="window.location.href='index.html'">
+        <span class="widget-icon">🏆</span>
+      </div>
+    </div>
 
-      let currentPlayer = null;
-      let currentGameId = null;
+    <script src="shared.js"></script>
+    <script>
       let selectedHorses = [];
       let allHorses = [];
-      let adminToken = localStorage.getItem("adminToken");
-      let isAdmin = false;
 
       document.addEventListener("DOMContentLoaded", () => {
         checkAdminStatus();
@@ -150,29 +171,17 @@
         updateAdminUI(); // Show/hide admin buttons
       });
 
-      async function apiCall(endpoint, method = "GET", data = null) {
-        const options = {
-          method,
-          headers: { "Content-Type": "application/json" },
-        };
-        if (adminToken)
-          options.headers["Authorization"] = `Bearer ${adminToken}`;
-        if (data) options.body = JSON.stringify(data);
-
-        const response = await fetch(`${API_URL}${endpoint}`, options);
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.detail || "API call failed");
-        }
-        return response.json();
-      }
 
       function updatePlayerDisplay() {
         if (currentPlayer) {
-          document.getElementById("playerDisplay").textContent =
-            `Playing as: ${currentPlayer.name}`;
-          document.getElementById("logoutPlayerBtn").style.display =
-            "inline-block";
+          const badge = document.getElementById("playerBadge");
+          const nameEl = document.getElementById("playerDisplayName");
+          const pinEl = document.getElementById("playerDisplayPIN");
+          const logoutBtn = document.getElementById("logoutPlayerBtn");
+          if (badge) badge.style.display = "inline-flex";
+          if (nameEl) nameEl.textContent = currentPlayer.name;
+          if (pinEl) pinEl.textContent = "PIN: " + currentPlayer.passcode;
+          if (logoutBtn) logoutBtn.style.display = "inline-block";
         }
       }
 
@@ -273,7 +282,7 @@
           // Show results WITHOUT speeds - only finish positions
           let html = "<ol>";
           result.race_results.forEach((horse) => {
-            html += `<li><strong>${horse.name}</strong> - Finished in position ${horse.position}</li>`;
+            html += `<li><strong>${escapeHTML(horse.name)}</strong> - Finished in position ${horse.position}</li>`;
           });
           html += "</ol>";
           html += `<p class="success">${result.message}</p>`;
@@ -340,7 +349,7 @@
                <p>Rounds used: ${result.rounds_used}</p>
                <h4>The actual top 3 were:</h4><ol>`;
             result.actual_top_three.forEach((horse) => {
-              html += `<li>${horse.name}</li>`;
+              html += `<li>${escapeHTML(horse.name)}</li>`;
             });
             html += `</ol>`;
           } else {
@@ -379,7 +388,7 @@
 
           result.participants.forEach((p) => {
             html += `<tr>
-        <td>${p.player_name}</td>
+        <td>${escapeHTML(p.player_name)}</td>
         <td>${p.rounds_used}</td>
         <td>${p.completed ? "✓ Completed" : "In Progress"}</td>
         <td><strong>${p.total_score}</strong></td>
@@ -393,85 +402,6 @@
         }
       }
 
-      // Admin Auth
-      function showAdminLogin() {
-        document.getElementById("adminLoginModal").style.display = "block";
-      }
-
-      function closeAdminLogin() {
-        document.getElementById("adminLoginModal").style.display = "none";
-        document.getElementById("adminUsername").value = "";
-        document.getElementById("adminPassword").value = "";
-      }
-
-      async function handleAdminLogin(e) {
-        e.preventDefault();
-        const username = document.getElementById("adminUsername").value;
-        const password = document.getElementById("adminPassword").value;
-
-        try {
-          const response = await fetch(
-            `${API_URL.replace("/api", "")}/api/auth/login`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ username, password }),
-            },
-          );
-
-          if (!response.ok) throw new Error("Invalid credentials");
-
-          const data = await response.json();
-          adminToken = data.access_token;
-          localStorage.setItem("adminToken", adminToken);
-          isAdmin = true;
-
-          updateAdminUI();
-          closeAdminLogin();
-          showNotification("Admin login successful!", "success");
-          loadAdminScores();
-        } catch (error) {
-          document.getElementById("adminLoginError").textContent =
-            error.message;
-          document.getElementById("adminLoginError").style.display = "block";
-        }
-      }
-
-      function logoutAdmin() {
-        adminToken = null;
-        isAdmin = false;
-        localStorage.removeItem("adminToken");
-        updateAdminUI();
-        showNotification("Logged out", "info");
-      }
-
-      async function checkAdminStatus() {
-        if (!adminToken) {
-          updateAdminUI();
-          return;
-        }
-
-        try {
-          const response = await fetch(
-            `${API_URL.replace("/api", "")}/api/auth/verify`,
-            {
-              headers: { Authorization: `Bearer ${adminToken}` },
-            },
-          );
-
-          if (response.ok) {
-            isAdmin = true;
-          } else {
-            logoutAdmin();
-            return;
-          }
-        } catch (error) {
-          logoutAdmin();
-          return;
-        }
-
-        updateAdminUI();
-      }
 
       function updateAdminUI() {
         document.getElementById("adminLoginBtn").style.display = isAdmin
@@ -480,17 +410,16 @@
         document.getElementById("adminLogoutBtn").style.display = isAdmin
           ? "inline-block"
           : "none";
+        
+        const adminBadge = document.getElementById("adminBadge");
+        if (adminBadge) adminBadge.style.display = isAdmin ? "inline-flex" : "none";
+
         document.getElementById("adminPanel").style.display = isAdmin
           ? "block"
           : "none";
       }
 
-      function showNotification(message, type = "info") {
-        const notification = document.getElementById("notification");
-        notification.textContent = message;
-        notification.className = `notification ${type} show`;
-        setTimeout(() => notification.classList.remove("show"), 3000);
-      }
+
     </script>
   </body>
 </html>

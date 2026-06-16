@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Think Twice - Game Theory Platform v0.3
+# Think Twice - Game Theory Platform v0.5.0
 # Local Development Run Script
 
 echo "🎮 Starting Think Twice Game Theory Platform..."
@@ -41,16 +41,20 @@ sleep 5
 echo -e "${BLUE}Step 3: Starting Backend (FastAPI)...${NC}"
 cd backend
 source venv/bin/activate
-uvicorn main:app --reload --host 0.0.0.0 --port 8000 &
+uvicorn main:app --reload --host 127.0.0.1 --port 8000 &
 BACKEND_PID=$!
 cd ..
 
 sleep 3
 
 # Step 4: Start Frontend
-echo -e "${BLUE}Step 4: Starting Frontend (HTTP Server)...${NC}"
+echo -e "${BLUE}Step 4: Starting Frontend (Vite)...${NC}"
 cd frontend
-python -m http.server 3000 > /dev/null 2>&1 &
+if [ ! -d "node_modules" ]; then
+    echo "Installing frontend dependencies (npm install)..."
+    npm install > /dev/null 2>&1
+fi
+npm run dev -- --port 3000 > /dev/null 2>&1 &
 FRONTEND_PID=$!
 cd ..
 
@@ -61,8 +65,8 @@ echo -e "${GREEN}✅ Platform Started Successfully!${NC}"
 echo ""
 echo -e "${YELLOW}Access the application:${NC}"
 echo "  🌐 Frontend:    http://localhost:3000"
-echo "  🔌 Backend API: http://localhost:8000"
-echo "  📚 API Docs:    http://localhost:8000/docs"
+echo "  🔌 Backend API: http://127.0.0.1:8000"
+echo "  📚 API Docs:    http://127.0.0.1:8000/docs"
 echo ""
 echo -e "${YELLOW}To stop the platform:${NC}"
 echo "  Press Ctrl+C to stop all services"

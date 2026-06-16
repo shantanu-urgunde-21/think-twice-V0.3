@@ -1,27 +1,7 @@
-// API URL - automatically detects localhost vs production
-// For production: Backend URL should be set via environment variable
-const API_URL = (() => {
-    // Allow manual override via window.BACKEND_URL
-    if (window.BACKEND_URL) {
-        return window.BACKEND_URL;
-    }
-    // Local development
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        return 'http://localhost:8000/api';
-    }
-    // Production: Use environment variable or Railway backend URL
-    // This is a fallback - should be configured via environment variables in Vercel
-    return 'https://think-twice-v03-production.up.railway.app/api';
-})();
-
-let currentPlayer = null;
-let currentGameId = null;
+let currentRoomCode = null;
+let isLobbyReady = false;
 let selectedHorses = [];
 let allHorses = [];
-
-// Admin authentication state
-let adminToken = localStorage.getItem('adminToken');
-let isAdmin = false;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -34,6 +14,16 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             currentPlayer = JSON.parse(savedPlayer);
             showPlayerLoggedIn();
+            
+            // Check if player has any active game running
+            checkActiveGameAndRedirect();
+            
+            // Check if we were in a room lobby
+            const savedRoom = localStorage.getItem('currentRoomCode');
+            if (savedRoom) {
+                currentRoomCode = savedRoom;
+                loadRoomDetails(savedRoom);
+            }
         } catch (e) {
             console.error('Error restoring player from localStorage:', e);
             localStorage.removeItem('currentPlayer');
@@ -44,6 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadLeaderboard();
     loadPlayers();
     loadGameSettings();
+    connectLobbyWebSocket();
 
     // Set up event listeners
     document.getElementById('registerForm').addEventListener('submit', registerPlayer);
@@ -55,33 +46,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// API Calls
-async function apiCall(endpoint, method = 'GET', data = null) {
-    const options = {
-        method,
-        headers: {
-            'Content-Type': 'application/json'
-        }
-    };
-    
-    // Add authorization header if admin is logged in
-    if (adminToken) {
-        options.headers['Authorization'] = `Bearer ${adminToken}`;
-    }
-
-    if (data) {
-        options.body = JSON.stringify(data);
-    }
-
-    const response = await fetch(`${API_URL}${endpoint}`, options);
-
-    if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'API call failed');
-    }
-
-    return response.json();
-}
 
 // Stats
 async function loadStats() {
@@ -121,29 +85,58 @@ async function loadPlayers() {
 async function registerPlayer(e) {
     e.preventDefault();
     const name = document.getElementById('playerName').value.trim();
+    const passcodeVal = document.getElementById('playerRegisterPasscode').value.trim();
+
+    const payload = { name };
+    if (passcodeVal) {
+        payload.passcode = passcodeVal;
+    }
 
     try {
-        const player = await apiCall('/players', 'POST', { name });
+        const player = await apiCall('/players', 'POST', payload);
         currentPlayer = player;
+        
+        // Show PIN to player
+        const pinDisplay = document.getElementById('generatedPasscode');
+        const pinBox = document.getElementById('passcodeDisplayBox');
+        if (pinDisplay && pinBox) {
+            pinDisplay.textContent = player.passcode;
+            pinBox.style.display = 'block';
+        }
+        
         showPlayerLoggedIn();
         document.getElementById('playerName').value = '';
+        document.getElementById('playerRegisterPasscode').value = '';
         loadStats();
         loadPlayers();
     } catch (error) {
-        alert(error.message);
+        showNotification(error.message, 'error');
     }
 }
 
 function selectPlayer() {
-    const playerId = document.getElementById('existingPlayers').value;
-    if (!playerId) return;
+    const select = document.getElementById('existingPlayers');
+    if (!select || !select.value) return;
 
-    apiCall(`/players/${playerId}`)
+    const playerName = select.options[select.selectedIndex].text;
+    const passcode = document.getElementById('playerPasscode').value.trim();
+
+    if (!passcode) {
+        showNotification('Please enter your passcode PIN!', 'error');
+        return;
+    }
+
+    apiCall('/players/verify', 'POST', { name: playerName, passcode })
         .then(player => {
             currentPlayer = player;
             showPlayerLoggedIn();
+            document.getElementById('playerPasscode').value = '';
+            
+            // Hide the passcode display box if it was open
+            const pinBox = document.getElementById('passcodeDisplayBox');
+            if (pinBox) pinBox.style.display = 'none';
         })
-        .catch(error => alert(error.message));
+        .catch(error => showNotification(error.message, 'error'));
 }
 
 function showPlayerLoggedIn() {
@@ -152,9 +145,28 @@ function showPlayerLoggedIn() {
         localStorage.setItem('currentPlayer', JSON.stringify(currentPlayer));
     }
 
-    document.getElementById('registration').style.display = 'none';
+    const regFields = document.getElementById('registrationFields');
+    if (regFields) regFields.style.display = 'none';
+    
+    const registrationHeader = document.querySelector('#registration h2');
+    if (registrationHeader) registrationHeader.innerHTML = '👤 Your Profile';
+
     document.getElementById('currentPlayer').style.display = 'block';
     document.getElementById('currentPlayerName').textContent = currentPlayer.name;
+    
+    const pinElLocal = document.getElementById('currentPlayerPIN');
+    if (pinElLocal) pinElLocal.textContent = currentPlayer.passcode;
+    
+    // Update header badge
+    const badge = document.getElementById('playerBadge');
+    const nameEl = document.getElementById('playerDisplayName');
+    const pinEl = document.getElementById('playerDisplayPIN');
+    const logoutBtn = document.getElementById('logoutPlayerBtn');
+    if (badge) badge.style.display = 'inline-flex';
+    if (nameEl) nameEl.textContent = currentPlayer.name;
+    if (pinEl) pinEl.textContent = 'PIN: ' + currentPlayer.passcode;
+    if (logoutBtn) logoutBtn.style.display = 'inline-block';
+
     document.getElementById('gameSelection').style.display = 'block';
     // Keep leaderboard visible
     document.getElementById('leaderboard').style.display = 'block';
@@ -164,7 +176,23 @@ function logout() {
     // Clear localStorage
     localStorage.removeItem('currentPlayer');
     currentPlayer = null;
-    document.getElementById('registration').style.display = 'block';
+    
+    // Hide passcode display box if visible
+    const pinBox = document.getElementById('passcodeDisplayBox');
+    if (pinBox) pinBox.style.display = 'none';
+    
+    // Update header badge
+    const badge = document.getElementById('playerBadge');
+    const logoutBtn = document.getElementById('logoutPlayerBtn');
+    if (badge) badge.style.display = 'none';
+    if (logoutBtn) logoutBtn.style.display = 'none';
+    
+    const regFields = document.getElementById('registrationFields');
+    if (regFields) regFields.style.display = 'block';
+    
+    const registrationHeader = document.querySelector('#registration h2');
+    if (registrationHeader) registrationHeader.innerHTML = 'Player Registration';
+    
     document.getElementById('currentPlayer').style.display = 'none';
     document.getElementById('gameSelection').style.display = 'none';
     backToHome();
@@ -187,7 +215,7 @@ async function loadLeaderboard() {
             const rankClass = entry.rank <= 3 ? `rank-${entry.rank}` : '';
             html += `<tr class="${rankClass}">
                 <td>#${entry.rank}</td>
-                <td>${entry.player_name}</td>
+                <td>${escapeHTML(entry.player_name)}</td>
                 <td>${entry.total_score}</td>
             </tr>`;
         });
@@ -217,6 +245,8 @@ async function loadGameSettings() {
                 gameName = 'two_thirds';
             } else if (href.includes('horse-race')) {
                 gameName = 'horse_race';
+            } else if (href.includes('fish-pond')) {
+                gameName = 'fish_pond';
             }
             
             if (gameName && !enabledGameNames.has(gameName)) {
@@ -237,7 +267,11 @@ async function loadAdminGameSettings() {
         
         let html = '<div class="game-settings">';
         settings.forEach(setting => {
-            const displayName = setting.game_name === 'two_thirds' ? '2/3 of Average' : 'Horse Racing';
+            const displayName = {
+                'two_thirds': '2/3 of Average',
+                'horse_race': 'Horse Racing',
+                'fish_pond': 'Fish Pond'
+            }[setting.game_name] || setting.game_name;
             html += `<div class="setting-row">
                 <label>${displayName}</label>
                 <input type="checkbox" ${setting.enabled ? 'checked' : ''} 
@@ -280,100 +314,138 @@ function backToHome() {
     loadLeaderboard();
 }
 
-// ==================== ADMIN AUTHENTICATION ====================
-
-function showAdminLogin() {
-    document.getElementById('adminLoginModal').style.display = 'block';
-    document.getElementById('adminLoginError').style.display = 'none';
-}
-
-function closeAdminLogin() {
-    document.getElementById('adminLoginModal').style.display = 'none';
-    document.getElementById('adminUsername').value = '';
-    document.getElementById('adminPassword').value = '';
-    document.getElementById('adminLoginError').style.display = 'none';
-}
-
-async function handleAdminLogin(e) {
-    e.preventDefault();
-    const username = document.getElementById('adminUsername').value;
-    const password = document.getElementById('adminPassword').value;
-    
-    try {
-        const response = await fetch(`${API_URL.replace('/api', '')}/api/auth/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
-        });
-        
-        if (!response.ok) {
-            throw new Error('Invalid credentials');
-        }
-        
-        const data = await response.json();
-        adminToken = data.access_token;
-        localStorage.setItem('adminToken', adminToken);
-        isAdmin = true;
-        
-        updateAdminUI();
-        closeAdminLogin();
-        showNotification('Admin login successful!', 'success');
-    } catch (error) {
-        document.getElementById('adminLoginError').textContent = error.message;
-        document.getElementById('adminLoginError').style.display = 'block';
-    }
-}
-
-function logoutAdmin() {
-    adminToken = null;
-    isAdmin = false;
-    localStorage.removeItem('adminToken');
-    updateAdminUI();
-    showNotification('Logged out successfully', 'info');
-}
-
-async function checkAdminStatus() {
-    if (!adminToken) {
-        updateAdminUI();
-        return;
-    }
-    
-    try {
-        const response = await fetch(`${API_URL.replace('/api', '')}/api/auth/verify`, {
-            headers: { 'Authorization': `Bearer ${adminToken}` }
-        });
-        
-        if (response.ok) {
-            isAdmin = true;
-        } else {
-            logoutAdmin();
-            return;
-        }
-    } catch (error) {
-        logoutAdmin();
-        return;
-    }
-    
-    updateAdminUI();
-}
 
 function updateAdminUI() {
     const loginBtn = document.getElementById('adminLoginBtn');
     const logoutBtn = document.getElementById('adminLogoutBtn');
     const adminPanel = document.getElementById('adminPanel');
+    const adminBadge = document.getElementById('adminBadge');
     
     if (loginBtn) loginBtn.style.display = isAdmin ? 'none' : 'block';
     if (logoutBtn) logoutBtn.style.display = isAdmin ? 'block' : 'none';
     if (adminPanel) adminPanel.style.display = isAdmin ? 'block' : 'none';
+    if (adminBadge) adminBadge.style.display = isAdmin ? 'inline-flex' : 'none';
     
     // Show/hide admin action buttons
     document.querySelectorAll('.admin-action').forEach(btn => {
         btn.style.display = isAdmin ? 'block' : 'none';
     });
     
-    // Load admin game settings if admin
+    // Load admin settings if admin
     if (isAdmin) {
         loadAdminGameSettings();
+        loadAdminPlayerManagement();
+    }
+}
+
+async function loadAdminPlayerManagement() {
+    try {
+        const players = await apiCall('/players');
+        const panel = document.getElementById('playerManagement');
+        if (!panel) return;
+        
+        if (players.length === 0) {
+            panel.innerHTML = '<p>No players registered yet.</p>';
+            return;
+        }
+        
+        let html = `
+            <table class="leaderboard-table" style="margin-top: 10px;">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>PIN</th>
+                        <th>Score</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        
+        players.forEach(p => {
+            html += `
+                <tr>
+                    <td>${escapeHTML(p.name)}</td>
+                    <td><strong style="color: #ffb700;">${p.passcode || 'N/A'}</strong></td>
+                    <td>${p.total_score}</td>
+                    <td>
+                        <button onclick="deletePlayerAdmin(${p.id}, '${escapeHTML(p.name.replace(/'/g, "\\'"))}')" 
+                                style="padding: 4px 8px; font-size: 0.75rem; background-color: var(--color-accent-rust); margin: 0; min-height: auto; width: auto;">
+                            Delete
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+        
+        html += `
+                </tbody>
+            </table>
+            <div style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
+                <button onclick="resetScoresAdmin()" class="admin-btn" style="font-size: 0.8rem; padding: 8px 16px; background-color: #4a3b32;">
+                    Reset All Scores
+                </button>
+                <button onclick="clearAllPlayersAdmin()" class="admin-btn" style="font-size: 0.8rem; padding: 8px 16px; background-color: var(--color-accent-rust);">
+                    Delete All Players
+                </button>
+            </div>
+        `;
+        panel.innerHTML = html;
+    } catch (error) {
+        console.error('Error loading admin player management:', error);
+    }
+}
+
+async function deletePlayerAdmin(id, name) {
+    if (!confirm(`Are you sure you want to delete player "${name}"?`)) return;
+    try {
+        await apiCall(`/players/${id}`, 'DELETE');
+        showNotification(`Player "${name}" deleted`, 'success');
+        loadAdminPlayerManagement();
+        loadLeaderboard();
+        loadPlayers();
+        loadStats();
+    } catch (error) {
+        showNotification(error.message, 'error');
+    }
+}
+
+async function resetScoresAdmin() {
+    if (!confirm('Are you sure you want to reset all players\' scores to 0?')) return;
+    try {
+        await apiCall('/players/reset-scores', 'POST');
+        showNotification('All player scores have been reset', 'success');
+        loadAdminPlayerManagement();
+        loadLeaderboard();
+    } catch (error) {
+        showNotification(error.message, 'error');
+    }
+}
+
+async function clearAllPlayersAdmin() {
+    if (!confirm('WARNING: Are you absolutely sure you want to delete ALL players? This cannot be undone.')) return;
+    try {
+        await apiCall('/players/clear-all', 'POST');
+        showNotification('All players deleted', 'success');
+        loadAdminPlayerManagement();
+        loadLeaderboard();
+        loadPlayers();
+        loadStats();
+    } catch (error) {
+        showNotification(error.message, 'error');
+    }
+}
+
+async function startFishPondGameAdmin() {
+    if (!isAdmin) {
+        showNotification('Admin access required', 'error');
+        return;
+    }
+    try {
+        await apiCall('/games/fish-pond/start', 'POST');
+        showNotification('Fish Pond game started successfully!', 'success');
+    } catch (error) {
+        showNotification(error.message, 'error');
     }
 }
 
@@ -393,39 +465,227 @@ async function startTwoThirdsGameAdmin() {
     }
 }
 
-// ==================== NOTIFICATION SYSTEM ====================
 
-function showNotification(message, type = 'info') {
-    const notification = document.getElementById('notification');
-    if (!notification) {
-        console.log('Notification:', message);
-        return;
-    }
+// ==================== LOBBY WEBSOCKETS ====================
+
+function connectLobbyWebSocket() {
+    const wsProtocol = API_URL.startsWith('https:') ? 'wss:' : 'ws:';
+    // Extract host from API_URL
+    const apiHost = API_URL.replace('http://', '').replace('https://', '').split('/')[0];
+    const wsUrl = `${wsProtocol}//${apiHost}/api/ws/lobby`;
     
-    notification.textContent = message;
-    notification.className = `notification ${type} show`;
-    
-    setTimeout(() => {
-        notification.classList.remove('show');
-    }, 3000);
+    const ws = new WebSocket(wsUrl);
+    ws.onmessage = (event) => {
+        try {
+            const data = JSON.parse(event.data);
+            if (data.event === 'player_registered') {
+                loadStats();
+                loadPlayers();
+                loadLeaderboard();
+            } else if (data.event === 'settings_updated') {
+                loadGameSettings();
+            } else if (data.event === 'lobby_updated') {
+                if (currentRoomCode && data.room_code === currentRoomCode) {
+                    loadRoomDetails(currentRoomCode);
+                }
+            } else if (data.event === 'game_started') {
+                if (currentRoomCode && data.room_code === currentRoomCode) {
+                    localStorage.removeItem('currentRoomCode');
+                    currentRoomCode = null;
+                    checkActiveGameAndRedirect();
+                } else {
+                    showNotification(`Game started: ${data.game_name.replace('_', ' ')}!`, 'success');
+                    loadGameSettings();
+                }
+            }
+        } catch (e) {
+            console.error('Error handling websocket message:', e);
+        }
+    };
+    ws.onclose = () => {
+        // Retry connection in 3 seconds
+        setTimeout(connectLobbyWebSocket, 3000);
+    };
 }
 
-// ==================== GAME VIEW MANAGEMENT ====================
+// ==================== ROOMS & LOBBIES MANAGEMENT ====================
 
-function startGame(gameType) {
+async function createLobbyRoom() {
     if (!currentPlayer) {
-        showNotification('Please register or select a player first!', 'error');
+        showNotification('Please register or log in first!', 'error');
         return;
     }
+    const game_name = document.getElementById('lobbyGameSelect').value;
+    try {
+        const room = await apiCall('/rooms/create', 'POST', {
+            player_id: currentPlayer.id,
+            game_name
+        });
+        currentRoomCode = room.room_code;
+        localStorage.setItem('currentRoomCode', currentRoomCode);
+        isLobbyReady = true; // Host is ready by default
+        renderRoomUI(room);
+    } catch (error) {
+        showNotification(error.message, 'error');
+    }
+}
+
+async function joinLobbyRoom() {
+    if (!currentPlayer) {
+        showNotification('Please register or log in first!', 'error');
+        return;
+    }
+    const room_code = document.getElementById('joinRoomCode').value.trim().toUpperCase();
+    if (!room_code) {
+        showNotification('Please enter a room code!', 'error');
+        return;
+    }
+    try {
+        const room = await apiCall('/rooms/join', 'POST', {
+            player_id: currentPlayer.id,
+            room_code
+        });
+        currentRoomCode = room.room_code;
+        localStorage.setItem('currentRoomCode', currentRoomCode);
+        isLobbyReady = false;
+        renderRoomUI(room);
+        document.getElementById('joinRoomCode').value = '';
+    } catch (error) {
+        showNotification(error.message, 'error');
+    }
+}
+
+async function loadRoomDetails(roomCode) {
+    try {
+        const room = await apiCall(`/rooms/${roomCode}`);
+        
+        // If the game status is active, redirect to the game
+        if (room.status === 'active') {
+            localStorage.removeItem('currentRoomCode'); // Clear waiting state
+            checkActiveGameAndRedirect();
+            return;
+        }
+        
+        renderRoomUI(room);
+    } catch (error) {
+        console.error('Error loading room details:', error);
+        // Clean up stale local storage
+        localStorage.removeItem('currentRoomCode');
+        currentRoomCode = null;
+        if (currentPlayer) {
+            showPlayerLoggedIn();
+        }
+    }
+}
+
+function renderRoomUI(room) {
+    document.getElementById('gameSelection').style.display = 'none';
+    document.getElementById('lobbyRoomView').style.display = 'block';
     
-    // Hide home view
-    document.getElementById('homeView').style.display = 'none';
+    document.getElementById('lobbyRoomCode').textContent = room.room_code;
     
-    if (gameType === 'two-thirds') {
-        startTwoThirdsGame();
-    } else if (gameType === 'horse-race') {
-        startHorseRaceGame();
-    } else if (gameType === 'fish-pond') {
-        startFishPondGame();
+    const displayNames = {
+        'two_thirds': '2/3 of Average',
+        'fish_pond': 'Fish Pond',
+        'horse_race': 'Horse Racing'
+    };
+    document.getElementById('lobbyRoomGameName').textContent = displayNames[room.game_name] || room.game_name;
+    document.getElementById('lobbyRoomHostName').textContent = room.host_name || 'N/A';
+    
+    // Render members
+    const tbody = document.getElementById('lobbyRoomMembers');
+    tbody.innerHTML = '';
+    
+    let allReady = true;
+    room.members.forEach(m => {
+        const isHost = m.player_id === room.host_id;
+        const readyText = m.is_ready ? '✅ READY' : '⏳ WAITING';
+        const readyClass = m.is_ready ? 'rank-1' : 'rank-3';
+        
+        if (!m.is_ready) allReady = false;
+        
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${escapeHTML(m.player_name)} ${isHost ? '👑 (Host)' : ''}</td>
+            <td class="${readyClass}" style="font-weight: bold;">${readyText}</td>
+        `;
+        tbody.appendChild(tr);
+        
+        // Update local ready state if matching current player
+        if (m.player_id === currentPlayer.id) {
+            isLobbyReady = m.is_ready;
+            const readyBtn = document.getElementById('lobbyReadyBtn');
+            if (readyBtn) {
+                readyBtn.textContent = isLobbyReady ? 'Set Not Ready' : 'Set Ready';
+                readyBtn.className = isLobbyReady ? 'back-btn' : 'game-btn';
+                readyBtn.style.marginTop = '0';
+            }
+        }
+    });
+    
+    // Toggle start game button visibility for Host
+    const startBtn = document.getElementById('lobbyStartGameBtn');
+    if (startBtn) {
+        const isHostPlayer = currentPlayer.id === room.host_id;
+        startBtn.style.display = isHostPlayer ? 'inline-block' : 'none';
+        startBtn.disabled = !allReady || room.members.length < 2;
+    }
+}
+
+async function toggleLobbyReady() {
+    if (!currentRoomCode || !currentPlayer) return;
+    try {
+        const newReadyState = !isLobbyReady;
+        await apiCall(`/rooms/${currentRoomCode}/ready?player_id=${currentPlayer.id}&is_ready=${newReadyState}`, 'POST');
+        loadRoomDetails(currentRoomCode);
+    } catch (error) {
+        showNotification(error.message, 'error');
+    }
+}
+
+async function startLobbyGame() {
+    if (!currentRoomCode || !currentPlayer) return;
+    try {
+        await apiCall(`/rooms/${currentRoomCode}/start?host_id=${currentPlayer.id}`, 'POST');
+        showNotification('Starting game...', 'success');
+        checkActiveGameAndRedirect();
+    } catch (error) {
+        showNotification(error.message, 'error');
+    }
+}
+
+async function leaveLobbyRoom() {
+    if (!currentRoomCode || !currentPlayer) return;
+    try {
+        await apiCall(`/rooms/${currentRoomCode}/leave?player_id=${currentPlayer.id}`, 'POST');
+        localStorage.removeItem('currentRoomCode');
+        currentRoomCode = null;
+        
+        document.getElementById('lobbyRoomView').style.display = 'none';
+        showPlayerLoggedIn();
+    } catch (error) {
+        showNotification(error.message, 'error');
+    }
+}
+
+async function checkActiveGameAndRedirect() {
+    if (!currentPlayer) return;
+    try {
+        const active = await apiCall(`/rooms/active-player-game/${currentPlayer.id}`);
+        if (active) {
+            const gamePage = {
+                'two_thirds': 'two-thirds-game.html',
+                'fish_pond': 'fish-pond-game.html',
+                'horse_race': 'horse-race-game.html'
+            }[active.game_name];
+            if (gamePage) {
+                showNotification(`Room game is active! Redirecting...`, 'success');
+                setTimeout(() => {
+                    window.location.href = gamePage;
+                }, 1000);
+            }
+        }
+    } catch (e) {
+        // Not in active game
     }
 }

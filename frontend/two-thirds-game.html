@@ -3,25 +3,46 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src *; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' 'unsafe-inline';" />
     <title>2/3 of Average - Think Twice</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
     <div class="container">
-      <header>
-        <h1>2/3 of Average Game</h1>
+      <header class="retro-header">
+        <div class="header-left">
+          <div class="logo-box">T2</div>
+          <div class="brand-text">
+            <span class="brand-title">THINK TWICE</span>
+            <span class="brand-subtitle">GAME THEORY PLATFORM</span>
+          </div>
+        </div>
+
+        <nav class="nav-links">
+          <a href="index.html" class="nav-link">HOME</a>
+          <a href="two-thirds-game.html" class="nav-link active">2/3 AVERAGE</a>
+          <a href="horse-race-game.html" class="nav-link">HORSE RACING</a>
+          <a href="fish-pond-game.html" class="nav-link">FISH POND</a>
+        </nav>
+
         <div id="headerControls">
-          <span
-            id="playerDisplay"
-            style="margin-right: 15px; color: #333"
-          ></span>
+          <div id="playerBadge" class="player-badge" style="display: none; margin-right: 10px;">
+            <span>👤</span>
+            <span id="playerDisplayName"></span>
+            <span id="playerDisplayPIN" class="badge-pin"></span>
+          </div>
           <button
             id="logoutPlayerBtn"
             onclick="logoutPlayer()"
-            style="display: none; margin-right: 10px; background: #6c757d"
+            style="display: none; margin-right: 10px;"
+            class="admin-toggle-btn"
           >
             Logout
           </button>
+          <span id="adminBadge" style="display: none;" class="admin-badge">⚙️ ADMIN MODE</span>
           <button
             id="adminLoginBtn"
             onclick="showAdminLogin()"
@@ -96,7 +117,7 @@
         </div>
 
         <div id="twoThirdsResults" style="display: none"></div>
-        <button onclick="backToHome()" class="back-btn">Back to Home</button>
+        <button onclick="leaveGameAndGoHome()" class="back-btn">Leave Game & Back to Home</button>
       </section>
 
       <!-- Admin Panel -->
@@ -129,18 +150,20 @@
 
     <div id="notification" class="notification"></div>
 
-    <script>
-      const API_URL = (() => {
-        if (window.BACKEND_URL) return window.BACKEND_URL;
-        if (window.location.hostname === "localhost")
-          return "http://localhost:8000/api";
-        return "https://think-twice-v03-production.up.railway.app/api";
-      })();
+    <!-- Floating Widgets -->
+    <div class="floating-widget">
+      <div class="widget-item terminal-widget" title="Terminal Access">
+        <span class="widget-icon">&gt;_</span>
+      </div>
+      <div class="widget-item trophy-widget" title="Back to Home" onclick="window.location.href='index.html'">
+        <span class="widget-icon">🏆</span>
+      </div>
+    </div>
 
-      let currentPlayer = null;
-      let currentGameId = null;
-      let adminToken = localStorage.getItem("adminToken");
-      let isAdmin = false;
+    <script src="shared.js"></script>
+    <script>
+      let currentRoomCode = null;
+      let isHost = false;
 
       document.addEventListener("DOMContentLoaded", () => {
         checkAdminStatus();
@@ -162,39 +185,66 @@
           ?.addEventListener("submit", handleAdminLogin);
 
         startTwoThirdsGameUI();
-        setInterval(updateSubmissionCount, 3000); // Auto-refresh every 3s
         updateAdminUI(); // Show/hide admin buttons
+
+        // Intercept navigation links if in active game
+        document.querySelectorAll('.nav-links a').forEach(link => {
+          link.addEventListener('click', async (e) => {
+            if (currentRoomCode) {
+              e.preventDefault();
+              const targetHref = link.href;
+              const confirmMsg = isHost
+                ? "You are the Host of an active game. Navigating away will transfer host privileges or close the game. Are you sure you want to leave?"
+                : "Are you sure you want to leave this active game?";
+              if (confirm(confirmMsg)) {
+                try {
+                  await apiCall(`/rooms/${currentRoomCode}/leave?player_id=${currentPlayer.id}`, "POST");
+                  localStorage.removeItem('currentRoomCode');
+                } catch (err) {
+                  console.error("Error leaving game:", err);
+                }
+                window.location.href = targetHref;
+              }
+            }
+          });
+        });
       });
 
-      async function apiCall(endpoint, method = "GET", data = null) {
-        const options = {
-          method,
-          headers: { "Content-Type": "application/json" },
-        };
-        if (adminToken)
-          options.headers["Authorization"] = `Bearer ${adminToken}`;
-        if (data) options.body = JSON.stringify(data);
-
-        const response = await fetch(`${API_URL}${endpoint}`, options);
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.detail || "API call failed");
-        }
-        return response.json();
-      }
 
       function updatePlayerDisplay() {
         if (currentPlayer) {
-          document.getElementById("playerDisplay").textContent =
-            `Playing as: ${currentPlayer.name}`;
-          document.getElementById("logoutPlayerBtn").style.display =
-            "inline-block";
+          const badge = document.getElementById("playerBadge");
+          const nameEl = document.getElementById("playerDisplayName");
+          const pinEl = document.getElementById("playerDisplayPIN");
+          const logoutBtn = document.getElementById("logoutPlayerBtn");
+          if (badge) badge.style.display = "inline-flex";
+          if (nameEl) nameEl.textContent = currentPlayer.name;
+          if (pinEl) pinEl.textContent = "PIN: " + currentPlayer.passcode;
+          if (logoutBtn) logoutBtn.style.display = "inline-block";
         }
       }
 
-      function logoutPlayer() {
-        localStorage.removeItem("currentPlayer");
-        window.location.href = "index.html";
+      async function leaveGameAndGoHome() {
+        if (!currentPlayer) {
+          window.location.href = "index.html";
+          return;
+        }
+
+        const confirmMsg = isHost
+          ? "Are you sure you want to leave? As the Host, leaving the game will transfer host privileges or close the game."
+          : "Are you sure you want to leave this active game?";
+
+        if (confirm(confirmMsg)) {
+          try {
+            if (currentRoomCode) {
+              await apiCall(`/rooms/${currentRoomCode}/leave?player_id=${currentPlayer.id}`, "POST");
+            }
+            localStorage.removeItem('currentRoomCode');
+          } catch (e) {
+            console.error("Error leaving game:", e);
+          }
+          window.location.href = "index.html";
+        }
       }
 
       function backToHome() {
@@ -203,24 +253,32 @@
 
       async function startTwoThirdsGameUI() {
         try {
-          let game;
+          let activeInfo;
           try {
-            game = await apiCall("/games/two-thirds/active");
+            activeInfo = await apiCall(`/rooms/active-player-game/${currentPlayer.id}`);
           } catch (e) {
-            game = null;
+            activeInfo = null;
           }
 
-          if (!game) {
+          if (!activeInfo || activeInfo.game_name !== 'two_thirds') {
             document.getElementById("twoThirdsForm").style.display = "none";
             document.getElementById("twoThirdsWaiting").innerHTML =
-              "<p>No active game. Admin needs to start the game.</p>";
+              "<p>No active game found for you. Please join a room from the homepage.</p>";
             document.getElementById("twoThirdsWaiting").style.display = "block";
             return;
           }
 
-          currentGameId = game.id;
+          currentGameId = activeInfo.game_id;
+          currentRoomCode = activeInfo.room_code;
+          
+          // Check if player is host
+          const roomDetails = await apiCall(`/rooms/${activeInfo.room_code}`);
+          isHost = (currentPlayer.id === roomDetails.host_id);
+          updateAdminUI();
+
+          connectGameWebSocket(activeInfo.game_id);
           const round = await apiCall(
-            `/games/two-thirds/${game.id}/current-round`,
+            `/games/two-thirds/${activeInfo.game_id}/current-round`,
           );
           document.getElementById("submissionCount").textContent =
             round.submissions_count;
@@ -233,6 +291,36 @@
             `<p>Error: ${error.message}</p>`;
           document.getElementById("twoThirdsWaiting").style.display = "block";
         }
+      }
+
+      function connectGameWebSocket(gameId) {
+        const wsProtocol = API_URL.startsWith('https:') ? 'wss:' : 'ws:';
+        const apiHost = API_URL.replace('http://', '').replace('https://', '').split('/')[0];
+        const wsUrl = `${wsProtocol}//${apiHost}/api/ws/game/${gameId}`;
+        const ws = new WebSocket(wsUrl);
+
+        ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.event === 'submission') {
+                    document.getElementById("submissionCount").textContent = data.submissions_count;
+                } else if (data.event === 'results_calculated') {
+                    showNotification("Results calculated by admin!", "success");
+                    calculateTwoThirds();
+                } else if (data.event === 'game_closed') {
+                    showNotification("Game closed by admin. Redirecting home...", "info");
+                    setTimeout(() => window.location.href = "index.html", 2000);
+                }
+            } catch (e) {
+                console.error("Websocket parse error:", e);
+            }
+        };
+
+        ws.onclose = () => {
+            if (currentGameId === gameId) {
+                setTimeout(() => connectGameWebSocket(gameId), 3000);
+            }
+        };
       }
 
       async function submitTwoThirdsGuess(e) {
@@ -270,7 +358,7 @@
       async function calculateTwoThirds() {
         try {
           const result = await apiCall(
-            `/games/two-thirds/${currentGameId}/calculate`,
+            `/games/two-thirds/${currentGameId}/calculate?host_id=${currentPlayer.id}`,
             "POST",
           );
 
@@ -278,14 +366,14 @@
       <h3>Results</h3>
       <p><strong>Average:</strong> ${result.average.toFixed(2)}</p>
       <p><strong>2/3 of Average:</strong> ${result.two_thirds_average.toFixed(2)}</p>
-      <p class="success"><strong>Winner:</strong> ${result.winner_name}</p>
+      <p class="success"><strong>Winner:</strong> ${escapeHTML(result.winner_name)}</p>
       <h4>All Guesses:</h4>
       <table class="leaderboard-table">
         <thead><tr><th>Player</th><th>Guess</th><th>Distance</th><th>Points</th></tr></thead>
         <tbody>`;
 
           result.all_guesses.forEach((g) => {
-            html += `<tr><td>${g.player_name}</td><td>${g.guess}</td><td>${g.distance.toFixed(2)}</td><td><strong>${g.points}</strong></td></tr>`;
+            html += `<tr><td>${escapeHTML(g.player_name)}</td><td>${g.guess}</td><td>${g.distance.toFixed(2)}</td><td><strong>${g.points}</strong></td></tr>`;
           });
 
           html += `</tbody></table></div>`;
@@ -298,8 +386,8 @@
       }
 
       async function closeGame() {
-        if (!isAdmin) {
-          showNotification("Admin access required", "error");
+        if (!isAdmin && !isHost) {
+          showNotification("Admin or Host access required", "error");
           return;
         }
 
@@ -322,7 +410,7 @@
         }
 
         try {
-          await apiCall(`/games/two-thirds/${currentGameId}/close`, "POST");
+          await apiCall(`/games/two-thirds/${currentGameId}/close?host_id=${currentPlayer.id}`, "POST");
           showNotification("Game closed successfully", "success");
           setTimeout(() => (window.location.href = "index.html"), 2000);
         } catch (error) {
@@ -366,7 +454,7 @@
           <tbody>`;
 
               round.submissions.forEach((sub) => {
-                html += `<tr><td>${sub.player_name}</td><td>${sub.guess}</td><td>${sub.score}</td></tr>`;
+                html += `<tr><td>${escapeHTML(sub.player_name)}</td><td>${sub.guess}</td><td>${sub.score}</td></tr>`;
               });
 
               html += `</tbody></table>`;
@@ -381,84 +469,6 @@
         }
       }
 
-      // Admin Auth
-      function showAdminLogin() {
-        document.getElementById("adminLoginModal").style.display = "block";
-      }
-
-      function closeAdminLogin() {
-        document.getElementById("adminLoginModal").style.display = "none";
-        document.getElementById("adminUsername").value = "";
-        document.getElementById("adminPassword").value = "";
-      }
-
-      async function handleAdminLogin(e) {
-        e.preventDefault();
-        const username = document.getElementById("adminUsername").value;
-        const password = document.getElementById("adminPassword").value;
-
-        try {
-          const response = await fetch(
-            `${API_URL.replace("/api", "")}/api/auth/login`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ username, password }),
-            },
-          );
-
-          if (!response.ok) throw new Error("Invalid credentials");
-
-          const data = await response.json();
-          adminToken = data.access_token;
-          localStorage.setItem("adminToken", adminToken);
-          isAdmin = true;
-
-          updateAdminUI();
-          closeAdminLogin();
-          showNotification("Admin login successful!", "success");
-        } catch (error) {
-          document.getElementById("adminLoginError").textContent =
-            error.message;
-          document.getElementById("adminLoginError").style.display = "block";
-        }
-      }
-
-      function logoutAdmin() {
-        adminToken = null;
-        isAdmin = false;
-        localStorage.removeItem("adminToken");
-        updateAdminUI();
-        showNotification("Logged out", "info");
-      }
-
-      async function checkAdminStatus() {
-        if (!adminToken) {
-          updateAdminUI();
-          return;
-        }
-
-        try {
-          const response = await fetch(
-            `${API_URL.replace("/api", "")}/api/auth/verify`,
-            {
-              headers: { Authorization: `Bearer ${adminToken}` },
-            },
-          );
-
-          if (response.ok) {
-            isAdmin = true;
-          } else {
-            logoutAdmin();
-            return;
-          }
-        } catch (error) {
-          logoutAdmin();
-          return;
-        }
-
-        updateAdminUI();
-      }
 
       function updateAdminUI() {
         document.getElementById("adminLoginBtn").style.display = isAdmin
@@ -467,21 +477,21 @@
         document.getElementById("adminLogoutBtn").style.display = isAdmin
           ? "inline-block"
           : "none";
+        
+        const adminBadge = document.getElementById("adminBadge");
+        if (adminBadge) adminBadge.style.display = isAdmin ? "inline-flex" : "none";
+
         document.getElementById("adminPanel").style.display = isAdmin
           ? "block"
           : "none";
 
+        const showActions = isAdmin || isHost;
         document.querySelectorAll(".admin-action").forEach((el) => {
-          el.style.display = isAdmin ? "block" : "none";
+          el.style.display = showActions ? "block" : "none";
         });
       }
 
-      function showNotification(message, type = "info") {
-        const notification = document.getElementById("notification");
-        notification.textContent = message;
-        notification.className = `notification ${type} show`;
-        setTimeout(() => notification.classList.remove("show"), 3000);
-      }
+
     </script>
   </body>
 </html>

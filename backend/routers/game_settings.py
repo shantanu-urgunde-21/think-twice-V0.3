@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List
 from database import get_db, GameSettings
@@ -23,6 +23,7 @@ def get_all_settings(
 def update_settings(
     game_name: str,
     update: GameSettingsUpdate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     admin: str = Depends(require_admin),
 ):
@@ -32,4 +33,8 @@ def update_settings(
     setting.enabled = update.enabled
     db.commit()
     db.refresh(setting)
+
+    from routers.websockets import manager
+    background_tasks.add_task(manager.broadcast_lobby, {"event": "settings_updated"})
+
     return setting

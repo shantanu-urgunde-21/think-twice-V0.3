@@ -1,15 +1,21 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from datetime import datetime
+from typing import Optional, List
+from jose import jwt
 from database import get_db, Player, Game, TwoThirdsRound, TwoThirdsSubmission
 from schemas import GameResponse, TwoThirdsSubmissionCreate, TwoThirdsResultResponse
-from config import TWO_THIRDS_CONFIG
+from config import TWO_THIRDS_CONFIG, SECRET_KEY, ALGORITHM, ADMIN_USERNAME
 from auth import require_admin
+
+security = HTTPBearer(auto_error=False)
 
 router = APIRouter(prefix="/api", tags=["Two-Thirds Game"])
 
 @router.post("/games/two-thirds/start", response_model=GameResponse)
 def start_two_thirds(
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db), admin: str = Depends(require_admin)
 ):
     # First, mark any completed games as finished
@@ -54,6 +60,13 @@ def start_two_thirds(
     db.add(round)
     db.commit()
 
+    from routers.websockets import manager
+    background_tasks.add_task(manager.broadcast_lobby, {
+        "event": "game_started",
+        "game_name": "two_thirds",
+        "game_id": game.id
+    })
+
     return game
 
 
@@ -94,7 +107,7 @@ def get_current_round(game_id: int, db: Session = Depends(get_db)):
 
 @router.post("/games/two-thirds/{game_id}/submit")
 def submit_two_thirds_guess(
-    game_id: int, submission: TwoThirdsSubmissionCreate, db: Session = Depends(get_db)
+    game_id: int, submission: TwoThirdsSubmissionCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)
 ):
     round = (
         db.query(TwoThirdsRound)
@@ -120,6 +133,18 @@ def submit_two_thirds_guess(
     )
     db.add(new_submission)
     db.commit()
+
+    submissions_count = (
+        db.query(TwoThirdsSubmission)
+        .filter(TwoThirdsSubmission.round_id == round.id)
+        .count()
+    )
+    from routers.websockets import manager
+    background_tasks.add_task(manager.broadcast_game, game_id, {
+        "event": "submission",
+        "submissions_count": submissions_count
+    })
+
     return {"success": True, "message": "Guess submitted"}
 
 
@@ -127,8 +152,31 @@ def submit_two_thirds_guess(
     "/games/two-thirds/{game_id}/calculate", response_model=TwoThirdsResultResponse
 )
 def calculate_two_thirds(
-    game_id: int, db: Session = Depends(get_db), admin: str = Depends(require_admin)
+    game_id: int, 
+    background_tasks: BackgroundTasks,
+    host_id: Optional[int] = None, 
+    db: Session = Depends(get_db),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
 ):
+    game = db.query(Game).filter(Game.id == game_id).first()
+    if not game:
+        raise HTTPException(404, "Game not found")
+
+    is_authorized = False
+    if host_id and game.host_id == host_id:
+        is_authorized = True
+    elif credentials:
+        try:
+            token = credentials.credentials
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            if payload.get("sub") == ADMIN_USERNAME:
+                is_authorized = True
+        except Exception:
+            pass
+
+    if not is_authorized:
+        raise HTTPException(status_code=403, detail="Not authorized to calculate results")
+
     round = (
         db.query(TwoThirdsRound)
         .filter(TwoThirdsRound.game_id == game_id, TwoThirdsRound.status == "open")
@@ -183,6 +231,11 @@ def calculate_two_thirds(
             }
         )
 
+    from routers.websockets import manager
+    background_tasks.add_task(manager.broadcast_game, game_id, {
+        "event": "results_calculated"
+    })
+
     return TwoThirdsResultResponse(
         round_id=round.id,
         average=average,
@@ -195,12 +248,31 @@ def calculate_two_thirds(
 
 @router.post("/games/two-thirds/{game_id}/close")
 def close_two_thirds(
-    game_id: int, db: Session = Depends(get_db), admin: str = Depends(require_admin)
+    game_id: int, 
+    background_tasks: BackgroundTasks,
+    host_id: Optional[int] = None, 
+    db: Session = Depends(get_db),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
 ):
     """Close the game and all its rounds"""
     game = db.query(Game).filter(Game.id == game_id).first()
     if not game:
         raise HTTPException(404, "Game not found")
+
+    is_authorized = False
+    if host_id and game.host_id == host_id:
+        is_authorized = True
+    elif credentials:
+        try:
+            token = credentials.credentials
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            if payload.get("sub") == ADMIN_USERNAME:
+                is_authorized = True
+        except Exception:
+            pass
+
+    if not is_authorized:
+        raise HTTPException(status_code=403, detail="Not authorized to close game")
 
     game.status = "completed"
     game.completed_at = datetime.utcnow()
@@ -215,6 +287,12 @@ def close_two_thirds(
         r.status = "closed"
 
     db.commit()
+
+    from routers.websockets import manager
+    background_tasks.add_task(manager.broadcast_game, game_id, {
+        "event": "game_closed"
+    })
+
     return {"message": "Game closed successfully. You can start a new game now."}
 
 

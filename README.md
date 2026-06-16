@@ -1,11 +1,11 @@
-# Think Twice - Game Theory Platform v0.3
+# Think Twice - Game Theory Platform v0.5.0
 
 A web platform for conducting game theory experiments.
 
 -  **Railway Deployment**: One-click deployment to Railway
 -  **Admin Authentication**: JWT-based admin panel with secure login
--  **PostgreSQL**: Production database with proper connection pooling
--  **Better UX**: Leaderboard only on home page, cleaner game views
+-  **Database Options**: PostgreSQL in production, and zero-configuration SQLite for local development
+
 -  **Error Handling**: Comprehensive error handling and validation
 -  **Security**: CORS configuration, environment variables, secure credentials
 
@@ -249,7 +249,8 @@ game-theory-v3/
 
 ### Prerequisites
 - Python 3.11+
-- Docker (for PostgreSQL)
+- Node.js (for Vite dev server)
+- Docker (optional, for running PostgreSQL locally)
 
 ### Setup
 
@@ -262,28 +263,32 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-2. **Start PostgreSQL**
+2. **Start PostgreSQL (Optional)**
+If you wish to use PostgreSQL locally instead of the default SQLite, run:
 ```bash
 docker run --name game-db -e POSTGRES_PASSWORD=gamepass123 \
   -e POSTGRES_USER=gameuser -e POSTGRES_DB=game_theory_db \
-  -p 5432:5432 -d postgres:15-alpine
+  -p 5433:5432 -d postgres:15-alpine
 ```
+*(Make sure to update `DATABASE_URL` to `postgresql://gameuser:gamepass123@localhost:5433/game_theory_db` in `backend/.env` if using PostgreSQL).*
 
 3. **Run Backend**
+By default (without Docker/PostgreSQL config), the backend will auto-initialize a SQLite database (`game_theory_db.db`) in the `backend/` directory.
 ```bash
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-4. **Open Frontend**
+4. **Setup and Run Frontend (Vite)**
 ```bash
-cd frontend
-python -m http.server 3000
+cd ../frontend
+npm install
+npm run dev
 ```
 
 5. **Access**
 - Frontend: http://localhost:3000
-- Backend API: http://localhost:8000
-- API Docs: http://localhost:8000/docs
+- Backend API: http://127.0.0.1:8000
+- API Docs: http://127.0.0.1:8000/docs
 
 ---
 

@@ -14,7 +14,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 480  # 8 hours
 
 # Database Configuration
 DATABASE_URL = os.getenv(
-    "DATABASE_URL", "postgresql://gameuser:gamepass123@localhost:5433/game_theory_db"
+    "DATABASE_URL", "sqlite:///./game_theory_db.db"
 )
 
 # If Railway provides DATABASE_URL with postgres:// instead of postgresql://
@@ -25,8 +25,12 @@ if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3001")
 # Default CORS origins - includes both localhost (dev) and known production URLs
 DEFAULT_CORS = [
+    "http://localhost:3000",
     "http://localhost:3001",
     "http://localhost:8000",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3001",
+    "http://127.0.0.1:8000",
     "https://think-twice-v03.vercel.app",
 ]
 if FRONTEND_URL not in DEFAULT_CORS:

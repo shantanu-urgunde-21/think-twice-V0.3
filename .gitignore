@@ -1,17 +1,29 @@
-studydocs/
-__pycache__/
-backend/venv/
-frontend/venv/
-*.py[cod]
-*.pyo
+# Dependency directories
+node_modules/
+frontend/node_modules/
+
+# Database files
+*.db
+*.sqlite
+backend/game_theory_db.db
+
+# Virtual environments
 venv/
 .venv/
+backend/venv/
+frontend/venv/
+
+# Python caching
+__pycache__/
+backend/__pycache__/
+*.py[cod]
+*.pyo
+*.pyc
+
+# Environment/Settings
 .env
 .vscode/
-venv/
-__pycache__/
-*.pyc
-.env
-backend/venv/
-backend/__pycache__/
+
+# Study docs / agent files
 studydocs/
+/.agent/

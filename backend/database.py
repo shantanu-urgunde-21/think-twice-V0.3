@@ -15,9 +15,16 @@ from sqlalchemy.pool import NullPool
 from datetime import datetime
 from config import DATABASE_URL
 
+# SQLite requires check_same_thread=False, PostgreSQL requires connect_timeout=10
+connect_args = {}
+if DATABASE_URL.startswith("sqlite"):
+    connect_args["check_same_thread"] = False
+else:
+    connect_args["connect_timeout"] = 10
+
 # Use NullPool for Railway/serverless environments
 engine = create_engine(
-    DATABASE_URL, poolclass=NullPool, connect_args={"connect_timeout": 10}
+    DATABASE_URL, poolclass=NullPool, connect_args=connect_args
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
@@ -37,6 +44,7 @@ class Player(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, nullable=False, index=True)
+    passcode = Column(String(6), nullable=True)
     total_score = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -50,6 +58,12 @@ class Player(Base):
     horse_race_attempts = relationship(
         "HorseRaceAttempt", back_populates="player", cascade="all, delete-orphan"
     )
+    fish_pond_submissions = relationship(
+        "FishPondSubmission", back_populates="player", cascade="all, delete-orphan"
+    )
+    room_memberships = relationship(
+        "RoomMembership", back_populates="player", cascade="all, delete-orphan"
+    )
 
 
 class Game(Base):
@@ -59,12 +73,21 @@ class Game(Base):
     name = Column(String, nullable=False, index=True)
     status = Column(String, default="waiting", index=True)
     round_number = Column(Integer, default=1)
+    
+    # Room specific columns
+    room_code = Column(String(6), unique=True, index=True, nullable=True)
+    host_id = Column(Integer, ForeignKey("players.id", ondelete="SET NULL"), nullable=True)
+    max_players = Column(Integer, default=10)
+    
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
     completed_at = Column(DateTime, nullable=True)
 
     # Relationships
     participations = relationship(
         "GameParticipation", back_populates="game", cascade="all, delete-orphan"
+    )
+    room_members = relationship(
+        "RoomMembership", back_populates="game", cascade="all, delete-orphan"
     )
 
 
@@ -85,8 +108,8 @@ class GameParticipation(Base):
     __tablename__ = "game_participations"
 
     id = Column(Integer, primary_key=True, index=True)
-    game_id = Column(Integer, ForeignKey("games.id", ondelete="CASCADE"))
-    player_id = Column(Integer, ForeignKey("players.id", ondelete="CASCADE"))
+    game_id = Column(Integer, ForeignKey("games.id", ondelete="CASCADE"), index=True)
+    player_id = Column(Integer, ForeignKey("players.id", ondelete="CASCADE"), index=True)
     score = Column(Integer, default=0)
 
     # Relationships
@@ -94,18 +117,32 @@ class GameParticipation(Base):
     player = relationship("Player", back_populates="game_participations")
 
 
+class RoomMembership(Base):
+    __tablename__ = "room_memberships"
+
+    id = Column(Integer, primary_key=True, index=True)
+    game_id = Column(Integer, ForeignKey("games.id", ondelete="CASCADE"), index=True)
+    player_id = Column(Integer, ForeignKey("players.id", ondelete="CASCADE"), index=True)
+    is_ready = Column(Boolean, default=False)
+    joined_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    game = relationship("Game", back_populates="room_members")
+    player = relationship("Player", back_populates="room_memberships")
+
+
 # Two-Thirds Game Models
 class TwoThirdsRound(Base):
     __tablename__ = "two_thirds_rounds"
 
     id = Column(Integer, primary_key=True, index=True)
-    game_id = Column(Integer, ForeignKey("games.id", ondelete="CASCADE"))
+    game_id = Column(Integer, ForeignKey("games.id", ondelete="CASCADE"), index=True)
     round_number = Column(Integer)
     status = Column(String, default="open", index=True)
     average = Column(Float, nullable=True)
     two_thirds_average = Column(Float, nullable=True)
     winner_id = Column(
-        Integer, ForeignKey("players.id", ondelete="SET NULL"), nullable=True
+        Integer, ForeignKey("players.id", ondelete="SET NULL"), nullable=True, index=True
     )
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -119,8 +156,8 @@ class TwoThirdsSubmission(Base):
     __tablename__ = "two_thirds_submissions"
 
     id = Column(Integer, primary_key=True, index=True)
-    round_id = Column(Integer, ForeignKey("two_thirds_rounds.id", ondelete="CASCADE"))
-    player_id = Column(Integer, ForeignKey("players.id", ondelete="CASCADE"))
+    round_id = Column(Integer, ForeignKey("two_thirds_rounds.id", ondelete="CASCADE"), index=True)
+    player_id = Column(Integer, ForeignKey("players.id", ondelete="CASCADE"), index=True)
     guess = Column(Integer, nullable=False)
     submitted_at = Column(DateTime, default=datetime.utcnow)
 
@@ -134,7 +171,7 @@ class HorseRaceGame(Base):
     __tablename__ = "horse_race_games"
 
     id = Column(Integer, primary_key=True, index=True)
-    game_id = Column(Integer, ForeignKey("games.id", ondelete="CASCADE"), unique=True)
+    game_id = Column(Integer, ForeignKey("games.id", ondelete="CASCADE"), unique=True, index=True)
     horses_data = Column(JSON)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -143,8 +180,8 @@ class HorseRaceAttempt(Base):
     __tablename__ = "horse_race_attempts"
 
     id = Column(Integer, primary_key=True, index=True)
-    game_id = Column(Integer, ForeignKey("horse_race_games.id", ondelete="CASCADE"))
-    player_id = Column(Integer, ForeignKey("players.id", ondelete="CASCADE"))
+    game_id = Column(Integer, ForeignKey("horse_race_games.id", ondelete="CASCADE"), index=True)
+    player_id = Column(Integer, ForeignKey("players.id", ondelete="CASCADE"), index=True)
     round_number = Column(Integer)
     selected_horses = Column(JSON)
     race_results = Column(JSON)
@@ -157,17 +194,33 @@ class HorseRaceAttempt(Base):
     player = relationship("Player", back_populates="horse_race_attempts")
 
 
-class HorseRaceGameCompletion(Base):
-    """Track number of times a player has completed horse race games"""
-
-    __tablename__ = "horse_race_game_completions"
+class FishPondGame(Base):
+    __tablename__ = "fish_pond_games"
 
     id = Column(Integer, primary_key=True, index=True)
-    player_id = Column(
-        Integer, ForeignKey("players.id", ondelete="CASCADE"), unique=True
-    )
-    completion_count = Column(Integer, default=0)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    game_id = Column(Integer, ForeignKey("games.id", ondelete="CASCADE"), unique=True, index=True)
+    status = Column(String, default="active", index=True)
+    initial_fish = Column(Integer, default=100)
+    current_fish = Column(Integer, default=100)
+    regeneration_rate = Column(Float, default=0.5)
+    max_rounds = Column(Integer, default=5)
+    current_round = Column(Integer, default=1)
+    collapsed = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class FishPondSubmission(Base):
+    __tablename__ = "fish_pond_submissions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    game_id = Column(Integer, ForeignKey("games.id", ondelete="CASCADE"), index=True)
+    player_id = Column(Integer, ForeignKey("players.id", ondelete="CASCADE"), index=True)
+    round_number = Column(Integer, index=True)
+    fish_caught = Column(Integer, nullable=False)
+    submitted_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    player = relationship("Player", back_populates="fish_pond_submissions")
 
 
 class GameSession(Base):
@@ -227,6 +280,40 @@ def get_db():
 
 def init_db():
     """Initialize database tables and default settings"""
+    # Migration logic for existing SQLite/Postgres DB
+    from sqlalchemy import inspect, text
+    inspector = inspect(engine)
+    
+    db = SessionLocal()
+    try:
+        # Check games table
+        if inspector.has_table("games"):
+            columns = [c["name"] for c in inspector.get_columns("games")]
+            if "room_code" not in columns:
+                db.execute(text("ALTER TABLE games ADD COLUMN room_code VARCHAR(6)"))
+                # Create a unique index for room_code
+                try:
+                    db.execute(text("CREATE UNIQUE INDEX ix_games_room_code ON games (room_code)"))
+                except Exception as e:
+                    print(f"Skipping index creation or index exists: {e}")
+            if "host_id" not in columns:
+                db.execute(text("ALTER TABLE games ADD COLUMN host_id INTEGER"))
+            if "max_players" not in columns:
+                db.execute(text("ALTER TABLE games ADD COLUMN max_players INTEGER DEFAULT 10"))
+                
+        # Check players table
+        if inspector.has_table("players"):
+            columns = [c["name"] for c in inspector.get_columns("players")]
+            if "passcode" not in columns:
+                db.execute(text("ALTER TABLE players ADD COLUMN passcode VARCHAR(6)"))
+                
+        db.commit()
+    except Exception as e:
+        print(f"Migration error: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
     Base.metadata.create_all(bind=engine)
 
     # Initialize default game settings
@@ -239,6 +326,7 @@ def init_db():
             games = [
                 GameSettings(game_name="two_thirds", enabled=True),
                 GameSettings(game_name="horse_race", enabled=True),
+                GameSettings(game_name="fish_pond", enabled=True),
             ]
             db.add_all(games)
             db.commit()

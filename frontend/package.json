@@ -1,0 +1,13 @@
+{
+  "name": "think-twice-frontend",
+  "version": "0.4.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^5.2.11"
+  }
+}

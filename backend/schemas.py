@@ -6,11 +6,13 @@ from datetime import datetime
 # Player Schemas
 class PlayerCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
+    passcode: Optional[str] = Field(None, min_length=4, max_length=6)
 
 
 class PlayerResponse(BaseModel):
     id: int
     name: str
+    passcode: Optional[str] = None
     total_score: int
     created_at: datetime
 
@@ -126,3 +128,60 @@ class GameSettingsResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# Fish Pond Game Schemas
+class FishPondSubmissionCreate(BaseModel):
+    player_id: int
+    fish_caught: int = Field(..., ge=0, le=20)
+
+
+class FishPondSubmissionResponse(BaseModel):
+    id: int
+    player_id: int
+    round_number: int
+    fish_caught: int
+    submitted_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class FishPondRoundResultResponse(BaseModel):
+    round_number: int
+    initial_fish: int
+    total_caught: int
+    remaining_fish: int
+    regeneration: int
+    current_fish: int
+    collapsed: bool
+    all_submissions: List[dict]
+
+
+# Room/Lobby Schemas
+class RoomCreate(BaseModel):
+    player_id: int
+    game_name: str  # "two_thirds" or "fish_pond"
+    max_players: Optional[int] = 10
+
+
+class RoomJoin(BaseModel):
+    player_id: int
+    room_code: str
+
+
+class RoomMemberInfo(BaseModel):
+    player_id: int
+    player_name: str
+    is_ready: bool
+
+
+class RoomDetailsResponse(BaseModel):
+    game_id: int
+    room_code: str
+    game_name: str
+    status: str
+    host_id: Optional[int]
+    host_name: Optional[str]
+    members: List[RoomMemberInfo]
+    max_players: int
