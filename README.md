@@ -2,14 +2,15 @@
 
 A web platform for conducting game theory experiments.
 
--  **Railway Deployment**: One-click deployment to Railway
--  **Admin Authentication**: JWT-based admin panel with secure login
--  **Database Options**: PostgreSQL in production, and zero-configuration SQLite for local development
+- **Railway Deployment**: One-click deployment to Railway
+- **Admin Authentication**: JWT-based admin panel with secure login
+- **Database Options**: PostgreSQL in production, and zero-configuration SQLite for local development
 
--  **Error Handling**: Comprehensive error handling and validation
--  **Security**: CORS configuration, environment variables, secure credentials
+- **Error Handling**: Comprehensive error handling and validation
+- **Security**: CORS configuration, environment variables, secure credentials
 
 ### Features
+
 - **3 Games**: Two-Thirds Average, Horse Racing, Fish Pond
 - **Admin Panel**: Protected game management and player administration
 - **Leaderboard**: Real-time global scoring system
@@ -20,6 +21,7 @@ A web platform for conducting game theory experiments.
 ## 🚀 Quick Deploy (5 Minutes)
 
 ### 1. Deploy Backend to Railway
+
 ```bash
 1. Go to railway.app and sign up with GitHub
 2. Click "New Project" → "Deploy from GitHub repo"
@@ -29,7 +31,9 @@ A web platform for conducting game theory experiments.
 ```
 
 ### 2. Configure Environment Variables
+
 In Railway, set these variables:
+
 ```
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=your_secure_password
@@ -38,6 +42,7 @@ FRONTEND_URL=https://your-frontend-url.com
 ```
 
 ### 3. Deploy Frontend to Vercel
+
 ```bash
 1. Go to vercel.com and sign up with GitHub
 2. Import your repository
@@ -46,9 +51,11 @@ FRONTEND_URL=https://your-frontend-url.com
 ```
 
 ### 4. Update Configuration
+
 Update `script.js` with your Railway backend URL:
+
 ```javascript
-const API_URL = 'https://your-backend.railway.app/api';
+const API_URL = "https://your-backend.railway.app/api";
 ```
 
 **📖 Full deployment guide**: See [RAILWAY_DEPLOYMENT.md](docs/RAILWAY_DEPLOYMENT.md)
@@ -92,9 +99,11 @@ const API_URL = 'https://your-backend.railway.app/api';
 ## 🎯 Games Explained
 
 ### 1. Two-Thirds of the Average
+
 **Concept**: Strategic thinking and level-k reasoning
 
 **Rules**:
+
 - Each player guesses a number (0-100)
 - Winner is closest to 2/3 of the average
 - Tests ability to predict others' reasoning
@@ -102,21 +111,25 @@ const API_URL = 'https://your-backend.railway.app/api';
 **Scoring**: Winner gets 10 points
 
 **Admin Actions**:
+
 - Start game
 - Calculate results when all submitted
 
 ---
 
 ### 2. Horse Racing
+
 **Concept**: Information gathering and deduction
 
 **Rules**:
+
 - 25 horses with hidden speeds
 - Each round: select 5 horses to race
 - Goal: Identify top 3 fastest in minimum rounds
 - Individual player challenge
 
-**Scoring**: 
+**Scoring**:
+
 - Base 50 points
 - Minus 5 points per round used
 - Minimum 10 points
@@ -126,9 +139,11 @@ const API_URL = 'https://your-backend.railway.app/api';
 ---
 
 ### 3. Fish Pond
+
 **Concept**: Tragedy of the commons
 
 **Rules**:
+
 - 100 fish in pond initially
 - 5 rounds total
 - Each round: catch 0-20 fish
@@ -140,6 +155,7 @@ const API_URL = 'https://your-backend.railway.app/api';
 **Dilemma**: Individual gain vs. collective sustainability
 
 **Admin Actions**:
+
 - Start game with all registered players
 - Calculate each round's results
 
@@ -232,9 +248,9 @@ game-theory-v3/
 │   ├── database.py          # SQLAlchemy models
 │   ├── schemas.py           # Pydantic validation
 │   ├── config.py            # Configuration
+│   ├── .env.example         # Local env template
 │   ├── requirements.txt     # Python dependencies
-│   ├── Procfile             # Railway config
-│   └── .env.example         # Environment template
+│   └── Procfile             # Railway config
 ├── frontend/
 │   ├── index.html           # Main HTML
 │   ├── script.js            # Frontend logic
@@ -248,13 +264,15 @@ game-theory-v3/
 ## 🔧 Local Development
 
 ### Prerequisites
-- Python 3.11+
+
+- Python 3.11+ <=3.12.xx
 - Node.js (for Vite dev server)
 - Docker (optional, for running PostgreSQL locally)
 
 ### Setup
 
 1. **Clone and Setup Backend**
+
 ```bash
 cd backend
 python -m venv venv
@@ -263,22 +281,28 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
+This project includes a sample template at `backend/.env.example`. You can copy it to `backend/.env` for local overrides. If you skip it, the app will still run with safe defaults from `backend/config.py`.
+
 2. **Start PostgreSQL (Optional)**
-If you wish to use PostgreSQL locally instead of the default SQLite, run:
+   If you wish to use PostgreSQL locally instead of the default SQLite, run:
+
 ```bash
 docker run --name game-db -e POSTGRES_PASSWORD=gamepass123 \
   -e POSTGRES_USER=gameuser -e POSTGRES_DB=game_theory_db \
   -p 5433:5432 -d postgres:15-alpine
 ```
-*(Make sure to update `DATABASE_URL` to `postgresql://gameuser:gamepass123@localhost:5433/game_theory_db` in `backend/.env` if using PostgreSQL).*
+
+_(Set `DATABASE_URL=postgresql://gameuser:gamepass123@localhost:5433/game_theory_db` in `backend/.env` if using PostgreSQL, or leave it unset to use SQLite by default)._
 
 3. **Run Backend**
-By default (without Docker/PostgreSQL config), the backend will auto-initialize a SQLite database (`game_theory_db.db`) in the `backend/` directory.
+   By default (without Docker/PostgreSQL config), the backend will auto-initialize a SQLite database (`game_theory_db.db`) in the `backend/` directory.
+
 ```bash
 uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 4. **Setup and Run Frontend (Vite)**
+
 ```bash
 cd ../frontend
 npm install
@@ -286,6 +310,7 @@ npm run dev
 ```
 
 5. **Access**
+
 - Frontend: http://localhost:3000
 - Backend API: http://127.0.0.1:8000
 - API Docs: http://127.0.0.1:8000/docs
@@ -295,12 +320,14 @@ npm run dev
 ## 📊 API Endpoints
 
 ### Public Endpoints
+
 - `POST /api/players` - Register player
 - `GET /api/players` - List all players
 - `GET /api/leaderboard` - Get rankings
 - `POST /api/games/{game}/submit` - Submit game move
 
 ### Admin Endpoints (Require Authentication)
+
 - `POST /api/auth/login` - Admin login
 - `POST /api/games/two-thirds/start` - Start Two-Thirds game
 - `POST /api/games/two-thirds/{id}/calculate` - Calculate results
@@ -315,19 +342,23 @@ npm run dev
 ## 🐛 Troubleshooting
 
 ### "Database connection failed"
+
 - Check PostgreSQL is running
 - Verify DATABASE_URL in environment variables
 
 ### "CORS error"
+
 - Update CORS_ORIGINS to include your frontend URL
 - No trailing slashes in URLs
 
 ### "Admin login failed"
+
 - Check ADMIN_USERNAME and ADMIN_PASSWORD
 - Verify SECRET_KEY is set
 - Check browser console for errors
 
 ### "502 Bad Gateway"
+
 - Backend is starting (wait 30 seconds)
 - Check Railway logs
 - Verify environment variables
@@ -339,12 +370,14 @@ npm run dev
 ## 📈 Monitoring
 
 ### Railway Dashboard
+
 - View deployment logs
 - Monitor resource usage
 - Check database connections
 - Restart services if needed
 
 ### Database Backup
+
 1. Go to Railway PostgreSQL service
 2. Click "Connect"
 3. Use pg_dump to export data
@@ -354,16 +387,19 @@ npm run dev
 ## 🎓 Game Theory Concepts
 
 ### Two-Thirds Game
+
 - Tests level-k reasoning
 - Nash equilibrium: everyone guesses 0
 - Real behavior: average often around 20-30
 
 ### Horse Racing
+
 - Information search strategies
 - Optimal algorithm: 7 races minimum
 - Tests systematic elimination
 
 ### Fish Pond
+
 - Tragedy of the commons
 - Shows tension between individual and collective good
 - Real-world applications: fishing, forestry, climate
@@ -381,6 +417,7 @@ MIT License - Free for educational and research use
 Built for conducting game theory experiments in educational settings.
 
 **Technology Stack**:
+
 - Backend: FastAPI, SQLAlchemy, PostgreSQL
 - Frontend: Vanilla JavaScript, HTML, CSS
 - Deployment: Railway, Vercel
@@ -389,6 +426,7 @@ Built for conducting game theory experiments in educational settings.
 ---
 
 ## 📞 Support
+
 - **Mail**: urgundeshantanu@gmail.com
 - **Deployment Issues**: Check [RAILWAY_DEPLOYMENT.md](docs/RAILWAY_DEPLOYMENT.md)
 - **API Questions**: Visit `/docs` endpoint

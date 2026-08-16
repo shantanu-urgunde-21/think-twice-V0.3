@@ -3,18 +3,21 @@
 ## ✅ Before You Deploy
 
 ### 1. Code Review
+
 - [ ] All files are in the correct directories
 - [ ] No sensitive data in code (passwords, keys, etc.)
 - [ ] API_URL configuration is correct in script.js
 - [ ] All admin functions are implemented
 
 ### 2. Configuration Files
-- [ ] `.env.example` is present (don't commit actual `.env`)
+
+- [ ] `backend/.env.example` is present and reflects the required env vars (don't commit actual `.env`)
 - [ ] `Procfile` is in backend directory
 - [ ] `railway.json` is in backend directory
-- [ ] `.gitignore` is in backend directory
+- [ ] `.gitignore` includes `.env` at the repo root
 
 ### 3. Security
+
 - [ ] Admin password will be changed from default
 - [ ] SECRET_KEY will be generated (use: `openssl rand -hex 32`)
 - [ ] CORS_ORIGINS will be set to actual frontend URL
@@ -25,6 +28,7 @@
 ## 📋 Deployment Steps
 
 ### Phase 1: Prepare Repository
+
 1. [ ] Create GitHub repository
 2. [ ] Add all files to repository:
    ```bash
@@ -36,6 +40,7 @@
    ```
 
 ### Phase 2: Deploy Backend to Railway
+
 1. [ ] Sign up at railway.app
 2. [ ] Create new project from GitHub repo
 3. [ ] Add PostgreSQL database service
@@ -56,6 +61,7 @@
 10. [ ] View API docs: `https://your-backend.railway.app/docs`
 
 ### Phase 3: Deploy Frontend to Vercel
+
 1. [ ] Sign up at vercel.com
 2. [ ] Import GitHub repository
 3. [ ] Set framework: Other
@@ -64,9 +70,10 @@
 6. [ ] Note your Vercel URL: `https://your-project.vercel.app`
 
 ### Phase 4: Update Configuration
+
 1. [ ] Update `script.js` line ~5:
    ```javascript
-   const API_URL = 'https://your-backend.railway.app/api';
+   const API_URL = "https://your-backend.railway.app/api";
    ```
 2. [ ] Commit and push changes
 3. [ ] Vercel will auto-redeploy
@@ -78,6 +85,7 @@
 5. [ ] Railway will auto-redeploy
 
 ### Phase 5: Test Everything
+
 1. [ ] Visit frontend URL
 2. [ ] Register a test player
 3. [ ] Check leaderboard appears
@@ -94,12 +102,14 @@
 ## 🔍 Testing Checklist
 
 ### Player Registration
+
 - [ ] Can register new player
 - [ ] Can select existing player
 - [ ] Player limit (40) is enforced
 - [ ] Duplicate names are prevented
 
 ### Admin Authentication
+
 - [ ] Admin login button visible
 - [ ] Can login with correct credentials
 - [ ] Login fails with wrong credentials
@@ -109,6 +119,7 @@
 - [ ] Token persists across page refreshes
 
 ### Two-Thirds Game
+
 - [ ] Admin can start game
 - [ ] Players can submit guesses
 - [ ] Can't submit twice
@@ -119,6 +130,7 @@
 - [ ] Leaderboard reflects new scores
 
 ### Horse Race Game
+
 - [ ] Player can start game
 - [ ] Can select 5 horses
 - [ ] Race button enables/disables correctly
@@ -129,6 +141,7 @@
 - [ ] Results show correct/incorrect
 
 ### Fish Pond Game
+
 - [ ] Admin can start game with all players
 - [ ] Current stock displays correctly
 - [ ] Each player can submit catch (0-20)
@@ -141,6 +154,7 @@
 - [ ] Final results show all player scores
 
 ### Leaderboard
+
 - [ ] Shows on home page only
 - [ ] Not visible during games
 - [ ] Updates after game results
@@ -152,26 +166,34 @@
 ## 🐛 Common Issues to Check
 
 ### Issue: "CORS Error"
+
 **Check:**
+
 - [ ] CORS_ORIGINS includes your frontend URL
 - [ ] No trailing slashes in URLs
 - [ ] Both HTTP and HTTPS match
 
 ### Issue: "Database Connection Failed"
+
 **Check:**
+
 - [ ] PostgreSQL service is running in Railway
 - [ ] DATABASE_URL is automatically set
 - [ ] Backend logs show connection attempts
 
 ### Issue: "Admin Login Fails"
+
 **Check:**
+
 - [ ] ADMIN_USERNAME is set correctly
-- [ ] ADMIN_PASSWORD is set correctly  
+- [ ] ADMIN_PASSWORD is set correctly
 - [ ] SECRET_KEY is set
 - [ ] Browser console for errors
 
 ### Issue: "502 Bad Gateway"
+
 **Check:**
+
 - [ ] Wait 30 seconds (backend starting)
 - [ ] Check Railway logs
 - [ ] PORT environment variable is used
@@ -181,12 +203,14 @@
 ## 📊 Performance Checks
 
 ### Backend Performance
+
 - [ ] API responds in < 500ms
 - [ ] Database queries are fast
 - [ ] No memory leaks in Railway metrics
 - [ ] Logs show no errors
 
 ### Frontend Performance
+
 - [ ] Page loads in < 3 seconds
 - [ ] No console errors
 - [ ] API calls complete successfully
@@ -220,6 +244,7 @@
 ## 🎯 Launch Day Checklist
 
 ### Before Event (1 Day Prior)
+
 - [ ] All tests passing
 - [ ] Admin credentials shared with organizers only
 - [ ] Frontend URL shared with participants
@@ -227,6 +252,7 @@
 - [ ] Backup plan in place
 
 ### Event Start (30 Minutes Prior)
+
 - [ ] Services are running
 - [ ] Admin is logged in
 - [ ] Test with 2-3 people
@@ -234,6 +260,7 @@
 - [ ] Have this checklist handy
 
 ### During Event
+
 - [ ] Monitor player registrations
 - [ ] Start games when ready
 - [ ] Calculate results promptly
@@ -241,6 +268,7 @@
 - [ ] Keep admin panel open
 
 ### After Event
+
 - [ ] Export database (Railway → PostgreSQL → Connect)
 - [ ] Save final leaderboard screenshot
 - [ ] Thank participants
@@ -255,6 +283,7 @@
 **Vercel Status**: https://www.vercel-status.com
 
 **Quick Fixes**:
+
 - Restart Railway service: Go to service → Settings → Restart
 - Rollback deployment: Go to Deployments → Click previous → Redeploy
 - Check logs: Click on service → View Logs
@@ -265,6 +294,7 @@
 ## ✅ Final Checklist
 
 Before saying "We're ready":
+
 - [ ] Backend deployed and accessible
 - [ ] Frontend deployed and accessible
 - [ ] Admin login works
@@ -283,6 +313,7 @@ Before saying "We're ready":
 When all boxes are checked, you're ready to run your game theory event!
 
 **Pro Tips**:
+
 - Have 2-3 admins logged in (different browsers/devices)
 - Keep Railway logs open in a tab
 - Test with friends before the actual event
