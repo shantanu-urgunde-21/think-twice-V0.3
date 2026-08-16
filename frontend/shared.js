@@ -5,10 +5,7 @@ const API_URL = (() => {
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
         return 'http://127.0.0.1:8000/api';
     }
-    if (window.location.port === '3000') {
-        return '/api';
-    }
-    return 'https://think-twice-v03-production.up.railway.app/api';
+    return '/api';
 })();
 
 function escapeHTML(str) {
