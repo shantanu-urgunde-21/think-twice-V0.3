@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src *; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' 'unsafe-inline';" />
+    <title>Think Twice - Game Theory Platform</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" crossorigin href="/assets/index-g0RYTUS-.css">
+  </head>
+  <body>
+    <div class="container">
+      <!-- Header -->
+      <header class="retro-header">
+        <div class="header-left">
+          <div class="logo-box">T2</div>
+          <div class="brand-text">
+            <span class="brand-title">THINK TWICE</span>
+            <span class="brand-subtitle">GAME THEORY PLATFORM</span>
+          </div>
+        </div>
+
+        <nav class="nav-links">
+          <a href="index.html" class="nav-link active">HOME</a>
+          <a href="two-thirds-game.html" class="nav-link">2/3 AVERAGE</a>
+          <a href="horse-race-game.html" class="nav-link">HORSE RACING</a>
+          <a href="fish-pond-game.html" class="nav-link">FISH POND</a>
+        </nav>
+
+        <div id="headerControls">
+          <div id="playerBadge" class="player-badge" style="display: none; margin-right: 10px;">
+            <span>👤</span>
+            <span id="playerDisplayName"></span>
+            <span id="playerDisplayPIN" class="badge-pin"></span>
+          </div>
+          <button id="logoutPlayerBtn" onclick="logout()" style="display: none; margin-right: 10px;" class="admin-toggle-btn">Logout</button>
+          <span id="adminBadge" style="display: none;" class="admin-badge">⚙️ ADMIN MODE</span>
+          <button
+            id="adminLoginBtn"
+            onclick="showAdminLogin()"
+            class="admin-toggle-btn"
+          >
+            Admin Login
+          </button>
+          <button
+            id="adminLogoutBtn"
+            onclick="logoutAdmin()"
+            class="admin-toggle-btn"
+            style="display: none"
+          >
+            Admin Logout
+          </button>
+        </div>
+      </header>
+
+      <!-- Admin Login Modal -->
+      <div id="adminLoginModal" class="modal" style="display: none">
+        <div class="modal-content">
+          <span class="close" onclick="closeAdminLogin()">&times;</span>
+          <h2>Admin Login</h2>
+          <form id="adminLoginForm">
+            <input
+              type="text"
+              id="adminUsername"
+              placeholder="Username"
+              required
+              autocomplete="username"
+            />
+            <input
+              type="password"
+              id="adminPassword"
+              placeholder="Password"
+              required
+              autocomplete="current-password"
+            />
+            <button type="submit">Login</button>
+          </form>
+          <div id="adminLoginError" class="error" style="display: none"></div>
+        </div>
+      </div>
+
+      <!-- Hero Banner -->
+      <div class="hero-container" style="max-height: 140px; margin-bottom: 30px; border: 3px solid var(--color-border); box-shadow: 6px 6px 0px var(--color-border); background-color: var(--color-card-bg); overflow: hidden; position: relative;">
+        <img src="/assets/think_twice_banner-CVyaYEVk.png" alt="Think Twice Banner" class="retro-banner" style="width: 100%; height: 140px; object-fit: cover; object-position: center; display: block; image-rendering: pixelated;" />
+      </div>
+
+      <!-- Home View (Grid Layout) -->
+      <div id="homeView" class="home-grid">
+        <!-- Left Column: Registration, Lobbies, and Room Details -->
+        <div class="home-left">
+          <!-- Player Registration -->
+          <section id="registration" class="section">
+            <h2>Player Registration</h2>
+            <div id="registrationFields">
+              <form id="registerForm">
+                <div style="display: flex; flex-direction: column; gap: 10px; width: 100%;">
+                  <input
+                    type="text"
+                    id="playerName"
+                    placeholder="Enter player name"
+                    required
+                  />
+                  <div style="display: flex; gap: 10px; align-items: center; width: 100%;">
+                    <input
+                      type="text"
+                      id="playerRegisterPasscode"
+                      placeholder="PIN (4-6 numbers, optional)"
+                      maxlength="6"
+                      style="flex: 1;"
+                    />
+                    <span class="info-icon" style="cursor: help; font-size: 1.1rem;" title="Optional: Set a 4-6 digit numeric PIN to protect your name. If left blank, we will generate a 4-digit PIN for you. You need this PIN to log back in next time.">ℹ️</span>
+                  </div>
+                  <button type="submit">Register</button>
+                </div>
+              </form>
+              <div id="playerSelect" style="margin-top: 20px; display: none">
+                <label>Or select existing player:</label>
+                <div style="display: flex; gap: 10px; margin-top: 8px; flex-wrap: wrap;">
+                  <select id="existingPlayers" style="flex: 1; min-width: 150px;">
+                    <option value="">Choose player...</option>
+                  </select>
+                  <input type="text" id="playerPasscode" placeholder="PIN" style="max-width: 120px;" />
+                  <button onclick="selectPlayer()">Select</button>
+                </div>
+              </div>
+            </div>
+            <div id="passcodeDisplayBox" class="success" style="display: none; margin-top: 20px;">
+              <p>Registration successful! Your PIN is: <strong id="generatedPasscode" style="font-size: 1.2rem; color: #ffb700;"></strong></p>
+              <p style="font-size: 0.8rem; margin-top: 6px;">Write this down. You will need it to log back in!</p>
+            </div>
+            <div id="currentPlayer" style="display: none; margin-top: 20px">
+              <p>Playing as: <strong id="currentPlayerName"></strong></p>
+              <p style="font-size: 0.85rem; color: var(--color-text-muted); margin-top: 8px;">Your PIN: <strong id="currentPlayerPIN" style="color: #ffb700;"></strong></p>
+              <button onclick="logout()" style="margin-top: 12px;">Change Player</button>
+            </div>
+          </section>
+
+          <!-- Game Selection / Lobby Hub -->
+          <section id="gameSelection" class="section" style="display: none">
+            <h2>Select a Game</h2>
+            
+            <div style="margin-bottom: 24px;">
+              <h3>Offline Single-Player</h3>
+              <div class="game-buttons" style="margin-top: 10px;">
+                <a href="horse-race-game.html" class="game-btn">Horse Racing</a>
+              </div>
+            </div>
+            
+            <hr style="border: 1px solid var(--color-border); margin: 20px 0;" />
+            
+            <div>
+              <h3>Multiplayer Lobbies</h3>
+              
+              <div class="status-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-top: 15px;">
+                <div class="status-item" style="border-left-color: var(--color-accent-rust); display: flex; flex-direction: column; gap: 10px; padding: 20px;">
+                  <label>Create a Room</label>
+                  <select id="lobbyGameSelect" style="padding: 8px;">
+                    <option value="two_thirds">2/3 of Average</option>
+                    <option value="fish_pond">Fish Pond</option>
+                  </select>
+                  <button onclick="createLobbyRoom()" class="admin-btn" style="padding: 8px 16px; font-size: 0.8rem; margin-top: 5px; width: 100%;">Create Room</button>
+                </div>
+                
+                <div class="status-item" style="border-left-color: var(--color-accent-blue); display: flex; flex-direction: column; gap: 10px; padding: 20px;">
+                  <label>Join Room Code</label>
+                  <input type="text" id="joinRoomCode" placeholder="Room Code (e.g. F3B8)" maxlength="6" style="padding: 8px; text-transform: uppercase;" />
+                  <button onclick="joinLobbyRoom()" class="game-btn" style="padding: 8px 16px; font-size: 0.8rem; margin-top: 5px; width: 100%;">Join Room</button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Lobby Room View -->
+          <section id="lobbyRoomView" class="section" style="display: none">
+            <h2>Room: <span id="lobbyRoomCode" style="color: #ffb700;"></span></h2>
+            <div class="status-grid" style="margin-top: 15px;">
+              <div class="status-item">
+                <label>Game Mode</label>
+                <span id="lobbyRoomGameName" style="font-size: 1.2rem; text-transform: uppercase;"></span>
+              </div>
+              <div class="status-item">
+                <label>Room Host</label>
+                <span id="lobbyRoomHostName" style="font-size: 1.2rem;"></span>
+              </div>
+            </div>
+
+            <div style="margin: 20px 0;">
+              <h3>Players Joined:</h3>
+              <table class="leaderboard-table" style="margin-top: 10px;">
+                <thead>
+                  <tr>
+                    <th>Player Name</th>
+                    <th>Ready Status</th>
+                  </tr>
+                </thead>
+                <tbody id="lobbyRoomMembers">
+                </tbody>
+              </table>
+            </div>
+
+            <div style="display: flex; gap: 15px; margin-top: 20px; flex-wrap: wrap;">
+              <button id="lobbyReadyBtn" onclick="toggleLobbyReady()" class="game-btn">Set Ready</button>
+              <button id="lobbyStartGameBtn" onclick="startLobbyGame()" class="admin-btn" style="display: none;">Start Game</button>
+              <button onclick="leaveLobbyRoom()" class="back-btn" style="margin-top: 0;">Leave Room</button>
+            </div>
+          </section>
+        </div>
+
+        <!-- Right Column: Leaderboard & Global Stats -->
+        <div class="home-right">
+          <!-- Platform stats -->
+          <section class="section" id="statsSection">
+            <h2>Lobby Stats</h2>
+            <div class="status-grid" style="grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
+              <div class="status-item" style="padding: 10px; border-left-color: var(--color-accent-rust);">
+                <label>Players Online</label>
+                <span id="playerCount" style="font-size: 1.2rem;">0/0</span>
+              </div>
+              <div class="status-item" style="padding: 10px; border-left-color: var(--color-accent-blue);">
+                <label>Active Games</label>
+                <span id="activeGames" style="font-size: 1.2rem;">0</span>
+              </div>
+            </div>
+          </section>
+
+          <!-- Leaderboard -->
+          <section id="leaderboard" class="section">
+            <h2>Leaderboard</h2>
+            <div id="leaderboardContent"></div>
+          </section>
+        </div>
+      </div>
+
+      <!-- Admin Panel (Only visible when logged in as admin) -->
+      <section id="adminPanel" class="section" style="display: none">
+        <h2>Admin Controls</h2>
+        <div class="admin-controls">
+          <div class="admin-control-group">
+            <h3>Game Visibility Settings</h3>
+            <div id="gameSettingsPanel"></div>
+          </div>
+          <div class="admin-control-group">
+            <h3>Game Management</h3>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+              <button onclick="startTwoThirdsGameAdmin()" class="admin-btn">
+                Start Two-Thirds Game
+              </button>
+              <button onclick="startFishPondGameAdmin()" class="admin-btn">
+                Start Fish Pond Game
+              </button>
+            </div>
+          </div>
+          <div class="admin-control-group">
+            <h3>Player Management</h3>
+            <div id="playerManagement"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div id="notification" class="notification"></div>
+
+    <!-- Floating Widgets -->
+    <div class="floating-widget">
+      <div class="widget-item terminal-widget" title="Terminal Access">
+        <span class="widget-icon">&gt;_</span>
+      </div>
+      <div class="widget-item trophy-widget" title="Scroll to Leaderboard" onclick="document.getElementById('leaderboard')?.scrollIntoView({behavior: 'smooth'})">
+        <span class="widget-icon">🏆</span>
+      </div>
+    </div>
+
+    <script src="shared.js"></script>
+    <script src="script.js"></script>
+  </body>
+</html>
+
