@@ -1,11 +1,31 @@
-﻿# Think Twice - Game Theory Platform
+# Think Twice - Game Theory Platform
 
-A web platform for conducting game theory experiments with up to 40 players.
+A multiplayer game theory platform built for live classroom events — deployed on **AWS EC2 + RDS PostgreSQL**, with real-time state sync over **WebSockets** proxied through Nginx.
 
-- **3 Games**: Two-Thirds Average, Horse Racing, Fish Pond
-- **Admin Panel**: JWT-protected game management
-- **Leaderboard**: Real-time global scoring
-- **Deployment**: AWS EC2 + RDS PostgreSQL
+![Think Twice main page](mainpagewelcomescreen.png)
+
+---
+
+## What's technically interesting
+
+### Real-time WebSocket communication
+The platform uses persistent WebSocket connections for lobby presence and live game events. In production, WebSocket connections share port 80 with the API — Nginx handles the HTTP→WS upgrade and forwards to FastAPI, so the same reverse proxy and the same port serve everything. The client derives the WS URL from `window.location`, making it work transparently across `localhost`, IP, or domain, and it upgrades to `wss://` automatically when HTTPS is in place:
+
+```js
+const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+const wsUrl = `${wsProtocol}//${window.location.host}/api/ws/game/${gameId}`;
+```
+
+### AWS infrastructure
+- **EC2** runs the full stack: Nginx (reverse proxy + static file server) and FastAPI (managed by systemd — auto-starts on boot, restarts on crash)
+- **RDS PostgreSQL** sits in a private subnet — port 5432 is open only to the EC2 security group, never to the public internet
+- **Elastic IP** assigned to EC2 for a stable public address
+- **Nginx** handles everything on port 80: `/api/*` proxied to FastAPI on `127.0.0.1:8000`, `/` served directly from the `frontend/` source tree as static files — Vite is a local dev tool only
+
+### Games
+- **Two-Thirds Average** — tests level-k strategic reasoning (Nash equilibrium: 0, real average: ~20–30)
+- **Horse Racing** — information search under constraint (optimal: 7 races for 25 horses)
+- **Fish Pond** — tragedy of the commons, real-time per-round state managed server-side
 
 ---
 
