@@ -1,318 +1,50 @@
-# Think Twice - Game Theory Platform v0.5.0
+﻿# Think Twice - Game Theory Platform
 
-A web platform for conducting game theory experiments.
-
-- **Railway Deployment**: One-click deployment to Railway
-- **Admin Authentication**: JWT-based admin panel with secure login
-- **Database Options**: PostgreSQL in production, and zero-configuration SQLite for local development
-
-- **Error Handling**: Comprehensive error handling and validation
-- **Security**: CORS configuration, environment variables, secure credentials
-
-### Features
+A web platform for conducting game theory experiments with up to 40 players.
 
 - **3 Games**: Two-Thirds Average, Horse Racing, Fish Pond
-- **Admin Panel**: Protected game management and player administration
-- **Leaderboard**: Real-time global scoring system
-- **Responsive**: Works on desktop and mobile
+- **Admin Panel**: JWT-protected game management
+- **Leaderboard**: Real-time global scoring
+- **Deployment**: AWS EC2 + RDS PostgreSQL
 
 ---
 
-## 🚀 Quick Deploy (5 Minutes)
-
-### 1. Deploy Backend to Railway
-
-```bash
-1. Go to railway.app and sign up with GitHub
-2. Click "New Project" → "Deploy from GitHub repo"
-3. Select your repository
-4. Railway auto-detects Python and deploys
-5. Add PostgreSQL: Click "New" → "Database" → "PostgreSQL"
-```
-
-### 2. Configure Environment Variables
-
-In Railway, set these variables:
-
-```
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=your_secure_password
-SECRET_KEY=your_32_char_random_string
-FRONTEND_URL=https://your-frontend-url.com
-```
-
-### 3. Deploy Frontend to Vercel
-
-```bash
-1. Go to vercel.com and sign up with GitHub
-2. Import your repository
-3. Set root directory to: frontend
-4. Deploy
-```
-
-### 4. Update Configuration
-
-Update `script.js` with your Railway backend URL:
-
-```javascript
-const API_URL = "https://your-backend.railway.app/api";
-```
-
-**📖 Full deployment guide**: See [RAILWAY_DEPLOYMENT.md](docs/RAILWAY_DEPLOYMENT.md)
-
----
-
-## 🎮 How to Use
-
-### For Participants
-
-1. **Register**
-   - Go to the frontend URL
-   - Enter your name to register
-   - Or select existing player
-
-2. **Play Games**
-   - Admin will start games
-   - Follow on-screen instructions
-   - Submit your moves
-   - View results and leaderboard
-
-### For Administrators
-
-1. **Login**
-   - Click "Admin Login" button
-   - Username: `admin` (or your configured username)
-   - Password: Your configured password
-
-2. **Manage Games**
-   - Start Two-Thirds game
-   - Start Fish Pond game
-   - Calculate results when ready
-
-3. **Monitor**
-   - View all players
-   - See who hasn't submitted
-   - Control game flow
-
----
-
-## 🎯 Games Explained
-
-### 1. Two-Thirds of the Average
-
-**Concept**: Strategic thinking and level-k reasoning
-
-**Rules**:
-
-- Each player guesses a number (0-100)
-- Winner is closest to 2/3 of the average
-- Tests ability to predict others' reasoning
-
-**Scoring**: Winner gets 10 points
-
-**Admin Actions**:
-
-- Start game
-- Calculate results when all submitted
-
----
-
-### 2. Horse Racing
-
-**Concept**: Information gathering and deduction
-
-**Rules**:
-
-- 25 horses with hidden speeds
-- Each round: select 5 horses to race
-- Goal: Identify top 3 fastest in minimum rounds
-- Individual player challenge
-
-**Scoring**:
-
-- Base 50 points
-- Minus 5 points per round used
-- Minimum 10 points
-
-**Strategy**: Efficient testing and elimination
-
----
-
-### 3. Fish Pond
-
-**Concept**: Tragedy of the commons
-
-**Rules**:
-
-- 100 fish in pond initially
-- 5 rounds total
-- Each round: catch 0-20 fish
-- Pond regenerates 50% per round
-- If overfished: pond collapses, game ends
-
-**Scoring**: 1 point per fish caught
-
-**Dilemma**: Individual gain vs. collective sustainability
-
-**Admin Actions**:
-
-- Start game with all registered players
-- Calculate each round's results
-
----
-
-## 🏗️ System Architecture & Data Flow
-
-This platform uses a decoupled three-tier architecture configured for quick deployment to Vercel (Frontend) and Railway (Backend API & PostgreSQL database).
-
-```mermaid
-flowchart TD
-  %% Style Definitions
-  classDef frontend fill:#e0f2fe,stroke:#0284c7,stroke-width:2px,color:#0369a1,font-size:16px
-  classDef backend fill:#d1fae5,stroke:#059669,stroke-width:2px,color:#065f46,font-size:16px
-  classDef database fill:#f3e8ff,stroke:#7c3aed,stroke-width:2px,color:#5b21b6,font-size:16px,font-weight:bold
-  classDef public_api fill:#ffedd5,stroke:#ea580c,stroke-width:2px,color:#c2410c,font-size:15px
-  classDef admin_api fill:#fce7f3,stroke:#db2777,stroke-width:2px,color:#9d174d,font-size:15px
-
-  %% FRONTEND TIER (Vercel)
-  subgraph Frontend_App ["Frontend App (Vercel)"]
-    UI_Player["Participant Interface<br/>(Registration, Game Play, Leaderboard)"]:::frontend
-    UI_Admin["Admin Panel<br/>(JWT-protected Game & Player Controls)"]:::frontend
-  end
-
-  %% API ENDPOINTS TIER
-  subgraph Public_Endpoints ["Public Endpoints"]
-    Endpoint_Reg["POST /api/players<br/>(Register Player)"]:::public_api
-    Endpoint_Submit["POST /api/games/{game}/submit<br/>(Submit Move)"]:::public_api
-    Endpoint_Leaderboard["GET /api/leaderboard<br/>(Rankings)"]:::public_api
-  end
-
-  subgraph Admin_Endpoints ["Admin Endpoints (JWT Protected)"]
-    Endpoint_Login["POST /api/auth/login<br/>(JWT Authentication)"]:::admin_api
-    Endpoint_Start["POST /api/games/{game}/start<br/>(Start Game/Round)"]:::admin_api
-    Endpoint_Calc["POST /api/games/{game}/calculate<br/>(Compute Results)"]:::admin_api
-  end
-
-  %% Connect Frontend to Endpoints
-  UI_Player -->|Register| Endpoint_Reg
-  UI_Player -->|Play Game| Endpoint_Submit
-  UI_Player -->|View rankings| Endpoint_Leaderboard
-
-  UI_Admin -->|Login with credentials| Endpoint_Login
-  UI_Admin -->|Initialize Game| Endpoint_Start
-  UI_Admin -->|Calculate scores| Endpoint_Calc
-
-  %% BACKEND TIER (FastAPI on Railway)
-  subgraph Backend_API ["Backend API (FastAPI on Railway)"]
-    FastAPI["FastAPI App (main.py)"]:::backend
-    JWTAuth["JWT Authenticator (auth.py)"]:::backend
-    PydanticSchemas["Pydantic Validation (schemas.py)"]:::backend
-    SQLAlchemy["SQLAlchemy ORM (database.py)"]:::backend
-
-    subgraph Game_Logic ["Game Engines"]
-      Logic_TwoThirds["Two-Thirds Average Logic<br/>(Guess closest to 2/3 of average)"]:::backend
-      Logic_Horses["Horse Racing Simulation<br/>(Select 5 of 25 / Find Top 3)"]:::backend
-      Logic_FishPond["Fish Pond Commons Dilemma<br/>(Catch 0-20 / Pond Regenerates 50%)"]:::backend
-    end
-  end
-
-  %% Connect Endpoints to Backend Router
-  Endpoint_Reg & Endpoint_Submit & Endpoint_Leaderboard --> FastAPI
-  Endpoint_Login --> JWTAuth
-  Endpoint_Start & Endpoint_Calc --> FastAPI
-  JWTAuth -.->|Verify token| FastAPI
-
-  FastAPI --> PydanticSchemas
-  FastAPI <-->|Execute rules| Game_Logic
-  FastAPI --> SQLAlchemy
-
-  %% DATABASE TIER (PostgreSQL on Railway)
-  subgraph Database_Tier ["Database Tier (PostgreSQL)"]
-    Table_Player["Table: players<br/>(ID, Name, Total Score)"]:::database
-    Table_Game["Table: game_sessions<br/>(Active state, Round count)"]:::database
-    Table_Submission["Table: submissions<br/>(Chosen moves, Round scores)"]:::database
-  end
-
-  SQLAlchemy <-->|Connection Pool / CRUD| Database_Tier
-```
-
----
-
-## 📁 Project Structure
-
-```
-game-theory-v3/
-├── backend/
-│   ├── main.py              # FastAPI app with all endpoints
-│   ├── auth.py              # JWT authentication
-│   ├── database.py          # SQLAlchemy models
-│   ├── schemas.py           # Pydantic validation
-│   ├── config.py            # Configuration
-│   ├── .env.example         # Local env template
-│   ├── requirements.txt     # Python dependencies
-│   └── Procfile             # Railway config
-├── frontend/
-│   ├── index.html           # Main HTML
-│   ├── script.js            # Frontend logic
-│   └── style.css            # Styling
-└── docs/
-    └── RAILWAY_DEPLOYMENT.md  # Full deployment guide
-```
-
----
-
-## 🔧 Local Development
+## Quick Start (Local Development)
 
 ### Prerequisites
 
-- Python 3.11+ <=3.12.xx
+- Python 3.11–3.12
 - Node.js (for Vite dev server)
-- Docker (optional, for running PostgreSQL locally)
+- Docker (optional, for local PostgreSQL)
 
-### Setup
-
-1. **Clone and Setup Backend**
+### Backend
 
 ```bash
 cd backend
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env
-```
-
-This project includes a sample template at `backend/.env.example`. You can copy it to `backend/.env` for local overrides. If you skip it, the app will still run with safe defaults from `backend/config.py`.
-
-2. **Start PostgreSQL (Optional)**
-   If you wish to use PostgreSQL locally instead of the default SQLite, run:
-
-```bash
-docker run --name game-db -e POSTGRES_PASSWORD=gamepass123 \
-  -e POSTGRES_USER=gameuser -e POSTGRES_DB=game_theory_db \
-  -p 5433:5432 -d postgres:15-alpine
-```
-
-_(Set `DATABASE_URL=postgresql://gameuser:gamepass123@localhost:5433/game_theory_db` in `backend/.env` if using PostgreSQL, or leave it unset to use SQLite by default)._
-
-3. **Run Backend**
-   By default (without Docker/PostgreSQL config), the backend will auto-initialize a SQLite database (`game_theory_db.db`) in the `backend/` directory.
-
-```bash
+cp .env.example .env      # edit as needed
 uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-4. **Setup and Run Frontend (Vite)**
+Without any `.env` changes the backend runs with SQLite automatically.
+
+### Local PostgreSQL (optional)
 
 ```bash
-cd ../frontend
-npm install
-npm run dev
-
-for aws ec2:
-npm run dev -- --host 0.0.0.0 --port 3000
+docker-compose up -d
+# Then set in backend/.env:
+# DATABASE_URL=postgresql://gameuser:gamepass123@localhost:5433/game_theory_db
 ```
 
-5. **Access**
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
 - Frontend: http://localhost:3000
 - Backend API: http://127.0.0.1:8000
@@ -320,121 +52,209 @@ npm run dev -- --host 0.0.0.0 --port 3000
 
 ---
 
-## 📊 API Endpoints
+## Production Deployment (EC2 + RDS)
 
-### Public Endpoints
+See **[docs/EC2_DEPLOYMENT.md](docs/EC2_DEPLOYMENT.md)** for the full setup guide.
 
-- `POST /api/players` - Register player
-- `GET /api/players` - List all players
-- `GET /api/leaderboard` - Get rankings
-- `POST /api/games/{game}/submit` - Submit game move
+Architecture:
 
-### Admin Endpoints (Require Authentication)
-
-- `POST /api/auth/login` - Admin login
-- `POST /api/games/two-thirds/start` - Start Two-Thirds game
-- `POST /api/games/two-thirds/{id}/calculate` - Calculate results
-- `POST /api/games/fish-pond/start` - Start Fish Pond game
-- `POST /api/games/fish-pond/{id}/calculate-round` - Calculate round
-- `DELETE /api/players/{id}` - Delete player
-
-**Full API Documentation**: Visit `/docs` on your backend URL
+```
+Browser → EC2 / Nginx (port 80)
+              ├── /api/*  → FastAPI systemd service (port 8000)
+              │                  └── RDS PostgreSQL (port 5432, private)
+              └── /       → frontend/ static files
+```
 
 ---
 
-## 🐛 Troubleshooting
+## How to Use
 
-### "Database connection failed"
+### For Participants
 
-- Check PostgreSQL is running
-- Verify DATABASE_URL in environment variables
+1. Go to the app URL and enter your name to register
+2. Wait for admin to start a game
+3. Follow on-screen instructions and submit your move
+4. View results and leaderboard
 
-### "CORS error"
+### For Administrators
 
-- Update CORS_ORIGINS to include your frontend URL
-- No trailing slashes in URLs
-
-### "Admin login failed"
-
-- Check ADMIN_USERNAME and ADMIN_PASSWORD
-- Verify SECRET_KEY is set
-- Check browser console for errors
-
-### "502 Bad Gateway"
-
-- Backend is starting (wait 30 seconds)
-- Check Railway logs
-- Verify environment variables
-
-**More help**: See [RAILWAY_DEPLOYMENT.md](docs/RAILWAY_DEPLOYMENT.md)
+1. Click **Admin Login** (top-right)
+2. Enter your configured username and password
+3. Start games, calculate results, and manage players from the admin panel
 
 ---
 
-## 📈 Monitoring
+## Games
 
-### Railway Dashboard
+### 1. Two-Thirds of the Average
 
-- View deployment logs
-- Monitor resource usage
-- Check database connections
-- Restart services if needed
+**Concept**: Strategic thinking and level-k reasoning
 
-### Database Backup
+- Each player guesses a number (0–100)
+- Winner is closest to 2/3 of the average of all guesses
+- Nash equilibrium: everyone guesses 0; real average typically lands around 20–30
 
-1. Go to Railway PostgreSQL service
-2. Click "Connect"
-3. Use pg_dump to export data
+**Scoring**: Winner gets 10 points
 
----
+### 2. Horse Racing
 
-## 🎓 Game Theory Concepts
+**Concept**: Information gathering and deduction
 
-### Two-Thirds Game
+- 25 horses with hidden speeds
+- Each round: select 5 to race
+- Goal: identify the top 3 fastest in the minimum number of rounds
+- Optimal algorithm: 7 races
 
-- Tests level-k reasoning
-- Nash equilibrium: everyone guesses 0
-- Real behavior: average often around 20-30
+**Scoring**: 50 points base, minus 5 per round used (min 10)
 
-### Horse Racing
+### 3. Fish Pond
 
-- Information search strategies
-- Optimal algorithm: 7 races minimum
-- Tests systematic elimination
+**Concept**: Tragedy of the commons
 
-### Fish Pond
+- 100 fish in pond initially, 5 rounds
+- Each round: catch 0–20 fish; pond regenerates 50%
+- If total catch exceeds stock: pond collapses, game ends early
 
-- Tragedy of the commons
-- Shows tension between individual and collective good
-- Real-world applications: fishing, forestry, climate
+**Scoring**: 1 point per fish caught
 
 ---
 
-## 📝 License
+## Architecture & Data Flow
 
-MIT License - Free for educational and research use
+```mermaid
+flowchart TD
+  classDef frontend fill:#e0f2fe,stroke:#0284c7,stroke-width:2px,color:#0369a1
+  classDef backend fill:#d1fae5,stroke:#059669,stroke-width:2px,color:#065f46
+  classDef database fill:#f3e8ff,stroke:#7c3aed,stroke-width:2px,color:#5b21b6
+
+  subgraph Frontend ["Frontend (Nginx → frontend/)"]
+    UI_Player["Participant Interface"]:::frontend
+    UI_Admin["Admin Panel (JWT-protected)"]:::frontend
+  end
+
+  subgraph Public_Endpoints ["Public Endpoints"]
+    Endpoint_Reg["POST /api/players"]:::frontend
+    Endpoint_Submit["POST /api/games/{game}/submit"]:::frontend
+    Endpoint_Leaderboard["GET /api/leaderboard"]:::frontend
+  end
+
+  subgraph Admin_Endpoints ["Admin Endpoints (JWT)"]
+    Endpoint_Login["POST /api/auth/login"]:::frontend
+    Endpoint_Start["POST /api/games/{game}/start"]:::frontend
+    Endpoint_Calc["POST /api/games/{game}/calculate"]:::frontend
+  end
+
+  UI_Player --> Endpoint_Reg & Endpoint_Submit & Endpoint_Leaderboard
+  UI_Admin --> Endpoint_Login & Endpoint_Start & Endpoint_Calc
+
+  subgraph Backend ["Backend (FastAPI / systemd)"]
+    FastAPI["FastAPI (main.py)"]:::backend
+    JWTAuth["JWT Auth (auth.py)"]:::backend
+    GameLogic["Game Engines"]:::backend
+    ORM["SQLAlchemy ORM"]:::backend
+  end
+
+  Endpoint_Reg & Endpoint_Submit & Endpoint_Leaderboard & Endpoint_Start & Endpoint_Calc --> FastAPI
+  Endpoint_Login --> JWTAuth
+  JWTAuth -.-> FastAPI
+  FastAPI <--> GameLogic
+  FastAPI --> ORM
+
+  subgraph DB ["RDS PostgreSQL"]
+    T1["players"]:::database
+    T2["game_sessions"]:::database
+    T3["submissions"]:::database
+  end
+
+  ORM <--> DB
+```
+
+For a detailed request-by-request data path, see **[docs/datapath.md](docs/datapath.md)**.
 
 ---
 
-## 🙏 Credits
+## Project Structure
 
-Built for conducting game theory experiments in educational settings.
-
-**Technology Stack**:
-
-- Backend: FastAPI, SQLAlchemy, PostgreSQL
-- Frontend: Vanilla JavaScript, HTML, CSS
-- Deployment: Railway, Vercel
-- Authentication: JWT (python-jose)
+```
+think-twice-V0.3/
+├── backend/
+│   ├── main.py              # FastAPI app
+│   ├── auth.py              # JWT authentication
+│   ├── database.py          # SQLAlchemy models
+│   ├── schemas.py           # Pydantic validation
+│   ├── config.py            # Centralised config
+│   ├── routers/             # Route handlers per game
+│   ├── .env.example         # Local env template
+│   └── requirements.txt
+├── frontend/
+│   ├── index.html
+│   ├── shared.js            # Shared API client & state
+│   ├── script.js            # Home page logic
+│   ├── two-thirds-game.html
+│   ├── horse-race-game.html
+│   ├── fish-pond-game.html
+│   └── style.css
+├── nginx/
+│   └── think-twice.conf     # Nginx config (versioned)
+└── docs/
+    ├── EC2_DEPLOYMENT.md    # Full EC2 + RDS setup guide
+    ├── DEPLOYMENT_CHECKLIST.md
+    └── datapath.md          # End-to-end data flow
+```
 
 ---
 
-## 📞 Support
+## API Endpoints
 
-- **Mail**: urgundeshantanu@gmail.com
-- **Deployment Issues**: Check [RAILWAY_DEPLOYMENT.md](docs/RAILWAY_DEPLOYMENT.md)
-- **API Questions**: Visit `/docs` endpoint
-- **Game Rules**: See game descriptions above
+### Public
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/players` | Register player |
+| `GET` | `/api/players` | List all players |
+| `GET` | `/api/leaderboard` | Get rankings |
+| `POST` | `/api/games/{game}/submit` | Submit game move |
+
+### Admin (JWT required)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/auth/login` | Admin login |
+| `POST` | `/api/games/two-thirds/start` | Start Two-Thirds game |
+| `POST` | `/api/games/two-thirds/{id}/calculate` | Calculate results |
+| `POST` | `/api/games/fish-pond/start` | Start Fish Pond game |
+| `POST` | `/api/games/fish-pond/{id}/calculate-round` | Calculate round |
+| `DELETE` | `/api/players/{id}` | Delete player |
+
+Full interactive docs: `http://<host>/api/docs`
 
 ---
 
-**Ready to deploy? Follow [RAILWAY_DEPLOYMENT.md](docs/RAILWAY_DEPLOYMENT.md)**
+## Troubleshooting
+
+| Symptom | Check |
+|---------|-------|
+| 502 Bad Gateway | `sudo systemctl status think-twice-backend` |
+| Backend errors | `sudo journalctl -u think-twice-backend -f` |
+| DB connection failed | `DATABASE_URL` in `.env`, RDS security group |
+| CORS error | `CORS_ORIGINS` in `.env` matches origin exactly |
+| Admin login fails | `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `SECRET_KEY` in `.env` |
+
+---
+
+## Tech Stack
+
+- **Backend**: FastAPI, SQLAlchemy, PostgreSQL (psycopg2)
+- **Frontend**: Vanilla JavaScript, HTML, CSS (Vite for local dev)
+- **Infrastructure**: AWS EC2, AWS RDS PostgreSQL, Nginx, systemd
+- **Auth**: JWT (python-jose, passlib/bcrypt)
+
+---
+
+## License
+
+MIT — free for educational and research use.
+
+---
+
+**Contact**: urgundeshantanu@gmail.com
