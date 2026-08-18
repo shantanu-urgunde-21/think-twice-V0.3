@@ -294,9 +294,8 @@
       }
 
       function connectGameWebSocket(gameId) {
-        const wsProtocol = API_URL.startsWith('https:') ? 'wss:' : 'ws:';
-        const apiHost = API_URL.replace('http://', '').replace('https://', '').split('/')[0];
-        const wsUrl = `${wsProtocol}//${apiHost}/api/ws/game/${gameId}`;
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${wsProtocol}//${window.location.host}/api/ws/game/${gameId}`;
         const ws = new WebSocket(wsUrl);
 
         ws.onmessage = (event) => {

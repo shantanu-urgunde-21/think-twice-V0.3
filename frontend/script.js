@@ -469,10 +469,8 @@ async function startTwoThirdsGameAdmin() {
 // ==================== LOBBY WEBSOCKETS ====================
 
 function connectLobbyWebSocket() {
-    const wsProtocol = API_URL.startsWith('https:') ? 'wss:' : 'ws:';
-    // Extract host from API_URL
-    const apiHost = API_URL.replace('http://', '').replace('https://', '').split('/')[0];
-    const wsUrl = `${wsProtocol}//${apiHost}/api/ws/lobby`;
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${wsProtocol}//${window.location.host}/api/ws/lobby`;
     
     const ws = new WebSocket(wsUrl);
     ws.onmessage = (event) => {
