@@ -24,6 +24,7 @@ backend/__pycache__/
 .env
 .vscode/
 
-# Study docs / agent files
+# Personal docs / agent files
+internaldocs/
 studydocs/
 /.agent/
