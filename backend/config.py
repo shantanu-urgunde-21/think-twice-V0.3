@@ -17,7 +17,8 @@ DATABASE_URL = os.getenv(
     "DATABASE_URL", "sqlite:///./game_theory_db.db"
 )
 
-# If Railway provides DATABASE_URL with postgres:// instead of postgresql://
+# Some managed Postgres providers hand out DATABASE_URL with the postgres://
+# scheme instead of postgresql://, which SQLAlchemy requires.
 if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
@@ -31,7 +32,6 @@ DEFAULT_CORS = [
     "http://127.0.0.1:3000",
     "http://127.0.0.1:3001",
     "http://127.0.0.1:8000",
-    "https://think-twice-v03.vercel.app",
 ]
 if FRONTEND_URL not in DEFAULT_CORS:
     DEFAULT_CORS.append(FRONTEND_URL)

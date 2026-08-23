@@ -22,7 +22,8 @@ if DATABASE_URL.startswith("sqlite"):
 else:
     connect_args["connect_timeout"] = 10
 
-# Use NullPool for Railway/serverless environments
+# NullPool avoids idle-connection buildup; see internaldocs/horizontalscaling.md
+# for the tradeoff if this ever needs to move to a pooled connection.
 engine = create_engine(
     DATABASE_URL, poolclass=NullPool, connect_args=connect_args
 )

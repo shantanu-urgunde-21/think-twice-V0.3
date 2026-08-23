@@ -11,6 +11,27 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gameuser -d game_theory_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    container_name: game_theory_backend
+    environment:
+      DATABASE_URL: postgresql://gameuser:gamepass123@postgres:5432/game_theory_db
+      SECRET_KEY: dev-secret-key
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: admin123
+      FRONTEND_URL: http://localhost:3000
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   postgres_data:
