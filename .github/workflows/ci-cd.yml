@@ -39,6 +39,8 @@ name: CI/CD
 on:
   push:
     branches: [ec2-deployment]
+    paths:
+      - "backend/**"
   pull_request:
   workflow_dispatch:
 
@@ -64,26 +66,8 @@ jobs:
         working-directory: backend
         run: pytest -q
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Install frontend dependencies
-        working-directory: frontend
-        run: npm ci
-
-      - name: Build frontend
-        working-directory: frontend
-        run: npm run build
-
-      - name: Upload frontend build
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-dist
-          path: frontend/dist
-          retention-days: 1
+      # Frontend is vanilla HTML served directly from frontend/ via git pull on EC2.
+      # No Vite build step needed — vite.config.js is dev-server only (API proxy).
 
   build-and-push:
     needs: test
@@ -128,11 +112,27 @@ jobs:
     if: github.ref == 'refs/heads/ec2-deployment' && github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
-      - name: Download frontend build
-        uses: actions/download-artifact@v4
+      - name: Deploy frontend + reload nginx if needed
+        uses: appleboy/ssh-action@v1
         with:
-          name: frontend-dist
-          path: dist
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_SSH_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+            cd ${{ env.APP_DIR }}
+            git pull origin ec2-deployment
+            # Log which frontend files changed (nginx serves them immediately — no restart needed)
+            FRONTEND_CHANGED=$(git diff HEAD@{1} HEAD --name-only | grep '^frontend/' || true)
+            if [ -n "$FRONTEND_CHANGED" ]; then
+              echo "Frontend files updated:"
+              echo "$FRONTEND_CHANGED"
+            fi
+            # Reload nginx only if its config changed
+            if git diff HEAD@{1} HEAD --name-only | grep -q '^nginx/'; then
+              echo "nginx config changed — reloading"
+              sudo nginx -t && sudo systemctl reload nginx
+            fi
 
       - name: Deploy backend via docker compose
         uses: appleboy/ssh-action@v1
@@ -143,12 +143,6 @@ jobs:
           script: |
             set -e
             cd ${{ env.APP_DIR }}
-            git pull origin ec2-deployment   # keeps docker-compose.yml + nginx/think-twice.conf in sync
-            # Reload nginx if its config changed in this push
-            if git diff HEAD@{1} HEAD --name-only | grep -q '^nginx/'; then
-              echo "nginx config changed — reloading"
-              sudo nginx -t && sudo systemctl reload nginx
-            fi
             export BACKEND_IMAGE="${{ needs.build-and-push.outputs.image }}:${{ github.sha }}"
             docker compose pull backend
             docker compose up -d --no-deps backend
@@ -162,41 +156,6 @@ jobs:
               sleep 3
             done
             echo "Health check failed after 10 attempts" && exit 1
-
-      - name: Prepare remote frontend upload directory
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_SSH_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            set -e
-            rm -rf ${{ env.APP_DIR }}/frontend/dist_new
-            mkdir -p ${{ env.APP_DIR }}/frontend/dist_new
-
-      - name: Upload new frontend build
-        uses: appleboy/scp-action@v1
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_SSH_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: "dist/*"
-          target: "${{ env.APP_DIR }}/frontend/dist_new"
-          strip_components: 1
-
-      - name: Atomically swap in new frontend build
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_SSH_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            set -e
-            cd ${{ env.APP_DIR }}/frontend
-            rm -rf dist_old
-            mv dist dist_old 2>/dev/null || true
-            mv dist_new dist
-            rm -rf dist_old
 
       - name: Smoke test public endpoint
         run: curl -sf "http://${{ secrets.EC2_HOST }}/" > /dev/null
