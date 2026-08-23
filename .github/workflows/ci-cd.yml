@@ -39,8 +39,6 @@ name: CI/CD
 on:
   push:
     branches: [ec2-deployment]
-    paths:
-      - "backend/**"
   pull_request:
   workflow_dispatch:
 
