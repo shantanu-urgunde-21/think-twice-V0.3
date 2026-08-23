@@ -38,7 +38,7 @@ name: CI/CD
 
 on:
   push:
-    branches: [main, ec2-deployment]
+    branches: [ec2-deployment]
   pull_request:
   workflow_dispatch:
 
@@ -125,7 +125,7 @@ jobs:
 
   deploy:
     needs: build-and-push
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/ec2-deployment' && github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - name: Download frontend build
@@ -134,7 +134,7 @@ jobs:
           name: frontend-dist
           path: dist
 
-      - name: Deploy backend container
+      - name: Deploy backend via docker compose
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -142,18 +142,26 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             set -e
-            IMAGE="${{ needs.build-and-push.outputs.image }}:${{ github.sha }}"
-            docker pull "$IMAGE"
-            docker stop think-twice-backend 2>/dev/null || true
-            docker rm think-twice-backend 2>/dev/null || true
-            docker run -d \
-              --name think-twice-backend \
-              --restart unless-stopped \
-              -p 127.0.0.1:8000:8000 \
-              --env-file ${{ env.APP_DIR }}/backend/.env \
-              "$IMAGE"
-            sleep 3
-            curl -sf http://127.0.0.1:8000/health
+            cd ${{ env.APP_DIR }}
+            git pull origin ec2-deployment   # keeps docker-compose.yml + nginx/think-twice.conf in sync
+            # Reload nginx if its config changed in this push
+            if git diff HEAD@{1} HEAD --name-only | grep -q '^nginx/'; then
+              echo "nginx config changed — reloading"
+              sudo nginx -t && sudo systemctl reload nginx
+            fi
+            export BACKEND_IMAGE="${{ needs.build-and-push.outputs.image }}:${{ github.sha }}"
+            docker compose pull backend
+            docker compose up -d --no-deps backend
+            # Health check with retries — /health returns {"status": "healthy"}
+            for i in $(seq 1 10); do
+              if curl -sf http://127.0.0.1:8000/health > /dev/null; then
+                echo "Health check passed"
+                exit 0
+              fi
+              echo "Attempt $i/10 failed, retrying in 3s..."
+              sleep 3
+            done
+            echo "Health check failed after 10 attempts" && exit 1
 
       - name: Prepare remote frontend upload directory
         uses: appleboy/ssh-action@v1
