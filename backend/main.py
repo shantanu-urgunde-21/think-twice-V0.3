@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from database import init_db
 from config import CORS_ORIGINS
-from routers import auth, game_settings, players, two_thirds, horse_race, general, fish_pond, websockets, rooms
+from routers import auth, game_settings, players, two_thirds, horse_race, general, fish_pond, market, websockets, rooms
 
 app = FastAPI(title="Game Theory Platform", version="2.0.0")
 
@@ -38,5 +38,6 @@ app.include_router(rooms.router)
 app.include_router(two_thirds.router)
 app.include_router(horse_race.router)
 app.include_router(fish_pond.router)
+app.include_router(market.router)
 app.include_router(websockets.router)
 app.include_router(general.router)

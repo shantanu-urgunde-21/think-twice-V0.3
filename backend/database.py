@@ -224,6 +224,60 @@ class FishPondSubmission(Base):
     player = relationship("Player", back_populates="fish_pond_submissions")
 
 
+# Hidden Market Game Models
+class MarketGame(Base):
+    __tablename__ = "market_games"
+
+    id = Column(Integer, primary_key=True, index=True)
+    game_id = Column(Integer, ForeignKey("games.id", ondelete="CASCADE"), unique=True, index=True)
+    status = Column(String, default="active", index=True)
+    round_number = Column(Integer, default=1)
+    max_rounds = Column(Integer, default=8)
+    price = Column(Float, default=50.0)
+    price_history = Column(JSON, default=list)
+    rng_seed = Column(Integer, nullable=False)
+    include_ai = Column(Boolean, default=True)
+    finished = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class MarketPlayerState(Base):
+    __tablename__ = "market_player_states"
+
+    id = Column(Integer, primary_key=True, index=True)
+    market_game_id = Column(Integer, ForeignKey("market_games.id", ondelete="CASCADE"), index=True)
+    # AI participant uses player_id = -1 (game.market.strategy.AI_PLAYER_ID);
+    # there is no Players FK constraint here so that sentinel id is valid.
+    player_id = Column(Integer, index=True)
+    cash = Column(Float, default=1000.0)
+    inventory = Column(Integer, default=0)
+    private_signal = Column(Float, default=0.0)
+
+
+class MarketAction(Base):
+    __tablename__ = "market_actions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    market_game_id = Column(Integer, ForeignKey("market_games.id", ondelete="CASCADE"), index=True)
+    round_number = Column(Integer, index=True)
+    player_id = Column(Integer, index=True)
+    action_type = Column(String, nullable=False)  # BUY | SELL | HOLD
+    qty = Column(Integer, default=0)
+    submitted_at = Column(DateTime, default=datetime.utcnow)
+
+
+class MarketRoundResult(Base):
+    __tablename__ = "market_round_results"
+
+    id = Column(Integer, primary_key=True, index=True)
+    market_game_id = Column(Integer, ForeignKey("market_games.id", ondelete="CASCADE"), index=True)
+    round_number = Column(Integer, index=True)
+    price_before = Column(Float, nullable=False)
+    price_after = Column(Float, nullable=False)
+    trades = Column(JSON, default=list)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class GameSession(Base):
     """Track game sessions for analytics"""
 
@@ -328,6 +382,7 @@ def init_db():
                 GameSettings(game_name="two_thirds", enabled=True),
                 GameSettings(game_name="horse_race", enabled=True),
                 GameSettings(game_name="fish_pond", enabled=True),
+                GameSettings(game_name="market", enabled=True),
             ]
             db.add_all(games)
             db.commit()

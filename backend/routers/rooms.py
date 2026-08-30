@@ -161,8 +161,29 @@ def start_room_game(room_code: str, host_id: int, background_tasks: BackgroundTa
                 collapsed=False
             )
             db.add(fp)
-            
+
     db.commit()
+
+    # Hidden Market needs the game.market.engine helpers (seeded RNG, AI
+    # participant row, etc.) and its own commit, so it is seeded after the
+    # participation/round commit above rather than inline with the others.
+    if game.name == "market":
+        from database import MarketGame
+        existing_market = db.query(MarketGame).filter(MarketGame.game_id == game.id).first()
+        if not existing_market:
+            from config import MARKET_CONFIG
+            from game.market import engine as market_engine
+            import random as _random
+
+            player_ids = [m.player_id for m in memberships]
+            market_engine.start_game(
+                db,
+                game_id=game.id,
+                player_ids=player_ids,
+                max_rounds=MARKET_CONFIG["max_rounds"],
+                seed=_random.randint(0, 2**31 - 1),
+                include_ai=True,
+            )
     
     # Broadcast game start
     background_tasks.add_task(manager.broadcast_game, game.id, {"event": "game_started", "game_name": game.name, "game_id": game.id, "room_code": room_code})

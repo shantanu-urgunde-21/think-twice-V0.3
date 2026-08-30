@@ -270,7 +270,8 @@ async function loadAdminGameSettings() {
             const displayName = {
                 'two_thirds': '2/3 of Average',
                 'horse_race': 'Horse Racing',
-                'fish_pond': 'Fish Pond'
+                'fish_pond': 'Fish Pond',
+                'market': 'Hidden Market'
             }[setting.game_name] || setting.game_name;
             html += `<div class="setting-row">
                 <label>${displayName}</label>
@@ -514,10 +515,15 @@ async function createLobbyRoom() {
         return;
     }
     const game_name = document.getElementById('lobbyGameSelect').value;
+    // Hidden Market's engine and price-elasticity constant are only
+    // exercised for 2-6 players (see backend/config.py MARKET_CONFIG);
+    // cap the room here rather than in the generic /rooms/create endpoint.
+    const max_players = game_name === 'market' ? 6 : undefined;
     try {
         const room = await apiCall('/rooms/create', 'POST', {
             player_id: currentPlayer.id,
-            game_name
+            game_name,
+            max_players
         });
         currentRoomCode = room.room_code;
         localStorage.setItem('currentRoomCode', currentRoomCode);
@@ -585,7 +591,8 @@ function renderRoomUI(room) {
     const displayNames = {
         'two_thirds': '2/3 of Average',
         'fish_pond': 'Fish Pond',
-        'horse_race': 'Horse Racing'
+        'horse_race': 'Horse Racing',
+        'market': 'Hidden Market'
     };
     document.getElementById('lobbyRoomGameName').textContent = displayNames[room.game_name] || room.game_name;
     document.getElementById('lobbyRoomHostName').textContent = room.host_name || 'N/A';
@@ -626,7 +633,10 @@ function renderRoomUI(room) {
     if (startBtn) {
         const isHostPlayer = currentPlayer.id === room.host_id;
         startBtn.style.display = isHostPlayer ? 'inline-block' : 'none';
-        startBtn.disabled = !allReady || room.members.length < 2;
+        // Hidden Market always includes a built-in AI opponent, so one
+        // human is a complete game. Other games need >=2 real players.
+        const minPlayers = room.game_name === 'market' ? 1 : 2;
+        startBtn.disabled = !allReady || room.members.length < minPlayers;
     }
 }
 
@@ -674,7 +684,8 @@ async function checkActiveGameAndRedirect() {
             const gamePage = {
                 'two_thirds': 'two-thirds-game.html',
                 'fish_pond': 'fish-pond-game.html',
-                'horse_race': 'horse-race-game.html'
+                'horse_race': 'horse-race-game.html',
+                'market': 'market-game.html'
             }[active.game_name];
             if (gamePage) {
                 showNotification(`Room game is active! Redirecting...`, 'success');

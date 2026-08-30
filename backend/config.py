@@ -70,3 +70,10 @@ HORSE_RACE_CONFIG = {
     "min_speed": 1,
     "max_speed": 100,
 }
+
+# Hidden Market Game Configuration
+MARKET_CONFIG = {
+    "max_rounds": 8,
+    "min_players": 2,
+    "max_players": 6,
+}

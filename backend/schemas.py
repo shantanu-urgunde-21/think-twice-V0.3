@@ -158,6 +158,48 @@ class FishPondRoundResultResponse(BaseModel):
     all_submissions: List[dict]
 
 
+# Hidden Market Game Schemas
+class MarketActionSubmit(BaseModel):
+    player_id: int
+    action_type: str = Field(..., pattern="^(BUY|SELL|HOLD)$")
+    qty: int = Field(0, ge=0)
+
+
+class MarketPlayerView(BaseModel):
+    game_id: int
+    round_number: int
+    max_rounds: int
+    price: float
+    price_history: List[float]
+    cash: float
+    inventory: int
+    private_signal: float
+    has_submitted: bool
+    submissions_count: int
+    total_players: int
+    finished: bool
+
+
+class MarketTradeInfo(BaseModel):
+    player_id: int
+    type: str
+    qty: int
+    fill_price: float
+
+
+class MarketRoundResultResponse(BaseModel):
+    round_number: int
+    price_before: float
+    price_after: float
+    trades: List[MarketTradeInfo]
+    finished: bool
+
+
+class MarketFinalResultResponse(BaseModel):
+    scores: List[dict]  # [{player_id, player_name, score}], sorted best first
+    price_history: List[float]
+
+
 # Room/Lobby Schemas
 class RoomCreate(BaseModel):
     player_id: int
